@@ -1,77 +1,352 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateUrlSecurity, sanitizeFilename } from '@/lib/security';
 import { downloadRateLimiter } from '@/lib/rate-limiter';
-import { isAllowedMimeType } from '@/lib/mime-types';
+import { isAllowedMimeType, getExtensionFromMime, getMimeFromExtension } from '@/lib/mime-types';
+import { spawn } from 'child_process';
+import { Readable } from 'stream';
+
+const PYTHON_BIN =
+  process.env.PYTHON_PATH ||
+  'E:\\Users\\itsbe\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+
+const FFMPEG_BIN =
+  process.env.FFMPEG_PATH ||
+  'E:\\Users\\itsbe\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
+
+/**
+ * Generates appropriate CDN headers (Referer, User-Agent, Origin, Range)
+ * to prevent upstream 403 Forbidden hotlink blocks across platforms.
+ */
+function getUpstreamHeaders(targetUrl: URL, clientRange?: string | null): Record<string, string> {
+    const hostname = targetUrl.hostname.toLowerCase();
+    const headers: Record<string, string> = {
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
+    };
+
+    if (hostname.includes('pinterest.com') || hostname.includes('pinimg.com')) {
+        headers['Referer'] = 'https://www.pinterest.com/';
+        headers['Origin'] = 'https://www.pinterest.com';
+        headers['Sec-Fetch-Dest'] = 'image';
+    } else if (hostname.includes('reddit.com') || hostname.includes('redd.it')) {
+        headers['Referer'] = 'https://www.reddit.com/';
+        headers['Origin'] = 'https://www.reddit.com';
+    } else if (
+        hostname.includes('instagram.com') ||
+        hostname.includes('cdninstagram.com') ||
+        hostname.includes('fbcdn.net')
+    ) {
+        headers['Referer'] = 'https://www.instagram.com/';
+        headers['Origin'] = 'https://www.instagram.com';
+    } else if (
+        hostname.includes('twitter.com') ||
+        hostname.includes('twimg.com') ||
+        hostname.includes('x.com')
+    ) {
+        headers['Referer'] = 'https://x.com/';
+        headers['Origin'] = 'https://x.com';
+    } else if (hostname.includes('tiktok.com') || hostname.includes('tiktokcdn.com')) {
+        headers['Referer'] = 'https://www.tiktok.com/';
+        headers['Origin'] = 'https://www.tiktok.com';
+    } else if (
+        hostname.includes('youtube.com') ||
+        hostname.includes('ytimg.com') ||
+        hostname.includes('googlevideo.com')
+    ) {
+        headers['Referer'] = 'https://www.youtube.com/';
+        headers['Origin'] = 'https://www.youtube.com';
+    }
+
+    if (clientRange) {
+        headers['Range'] = clientRange;
+    }
+
+    return headers;
+}
 
 export async function GET(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
     const rateLimit = downloadRateLimiter.check(ip);
 
-    if (!rateLimit.allowed) {
-        return new NextResponse(`Rate limit exceeded. Try again in ${rateLimit.resetInSec}s.`, {
-            status: 429,
-            headers: { 'Content-Type': 'text/plain' },
-        });
-    }
-
-    const { searchParams } = new URL(req.url);
-    const targetUrl = searchParams.get('url');
-    const customFilename = searchParams.get('filename') || 'media_download';
-
-    if (!targetUrl) {
-        return new NextResponse('Missing required "url" parameter.', { status: 400 });
-    }
-
-    // SSRF check
-    const security = await validateUrlSecurity(targetUrl);
-    if (!security.isSafe) {
-        return new NextResponse(`Access denied: ${security.reason}`, { status: 403 });
-    }
-
-    try {
-        const upstream = await fetch(targetUrl, {
-            headers: {
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-            },
-            signal: AbortSignal.timeout(60000), // 60s timeout for large file streaming
-        });
-
-        if (!upstream.ok) {
-            return new NextResponse(`Upstream service returned error HTTP ${upstream.status}`, {
-                status: upstream.status,
-            });
+        if (!rateLimit.allowed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'RATE_LIMITED',
+                        message: `Download rate limit reached. Please wait ${rateLimit.resetInSec} seconds.`,
+                    },
+                },
+                { status: 429 }
+            );
         }
 
-        const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-        const contentLength = upstream.headers.get('content-length');
+        const { searchParams } = new URL(req.url);
+        const downloadType = searchParams.get('type');
 
-        // MIME type safety validation
-        if (!isAllowedMimeType(contentType)) {
-            return new NextResponse('The requested file type is not allowed for security reasons.', {
-                status: 415,
-            });
+        // Handle YouTube authorized streaming with on-the-fly audio/video multiplexing
+        if (downloadType === 'yt_stream') {
+            const videoId = searchParams.get('videoId');
+            const quality = searchParams.get('quality') || '720';
+            const customFilename = searchParams.get('filename') || `youtube_${videoId}.mp4`;
+
+            if (!videoId || !/^[a-zA-Z0-9_-]{6,15}$/.test(videoId)) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'INVALID_URL', message: 'Invalid YouTube video ID parameter.' } },
+                    { status: 400 }
+                );
+            }
+
+            const isAudio = quality === 'audio';
+            const safeFilename = sanitizeFilename(customFilename, isAudio ? 'audio.mp3' : 'video.mp4');
+            const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+            const args = isAudio
+                ? [
+                      '-m',
+                      'yt_dlp',
+                      '-f',
+                      'ba/b',
+                      '-x',
+                      '--audio-format',
+                      'mp3',
+                      '--ffmpeg-location',
+                      FFMPEG_BIN,
+                      '-o',
+                      '-',
+                      '--no-playlist',
+                      '--no-warnings',
+                      targetUrl,
+                  ]
+                : [
+                      '-m',
+                      'yt_dlp',
+                      '-f',
+                      `bestvideo[height<=${parseInt(quality, 10) || 720}]+bestaudio/best[height<=${parseInt(quality, 10) || 720}]/best`,
+                      '--downloader-args',
+                      'ffmpeg_o:-movflags +frag_keyframe+empty_moov -f mp4',
+                      '--ffmpeg-location',
+                      FFMPEG_BIN,
+                      '-o',
+                      '-',
+                      '--no-playlist',
+                      '--no-warnings',
+                      targetUrl,
+                  ];
+
+            try {
+                const child = spawn(/*turbopackIgnore: true*/ PYTHON_BIN, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+                req.signal.addEventListener('abort', () => {
+                    child.kill();
+                });
+
+                const webStream = Readable.toWeb(child.stdout);
+                const headers = new Headers();
+                headers.set(
+                    'Content-Disposition',
+                    `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`
+                );
+                headers.set('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+                headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+                return new NextResponse(webStream as ReadableStream, {
+                    status: 200,
+                    headers,
+                });
+            } catch (err) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'STREAM_FAILED',
+                            message: `Streaming pipeline failed: ${(err as Error).message}`,
+                        },
+                    },
+                    { status: 502 }
+                );
+            }
         }
 
-        const safeFilename = sanitizeFilename(customFilename, 'download');
+        const rawTargetUrl = searchParams.get('url');
+        const customFilename = searchParams.get('filename') || 'media_download';
 
-        const headers = new Headers();
-        headers.set('Content-Disposition', `attachment; filename="${safeFilename}"`);
-        headers.set('Content-Type', contentType);
-        if (contentLength) {
-            headers.set('Content-Length', contentLength);
+        if (!rawTargetUrl) {
+            return NextResponse.json(
+                { success: false, error: { code: 'INVALID_URL', message: 'Missing required "url" parameter.' } },
+                { status: 400 }
+            );
         }
-        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 
-        // Stream upstream body directly
-        return new NextResponse(upstream.body as ReadableStream, {
-            status: 200,
-            headers,
-        });
-    } catch (err) {
-        return new NextResponse(`Download streaming failed: ${(err as Error).message}`, {
-            status: 502,
-        });
-    }
-}
+        let currentUrl = rawTargetUrl;
+        let response: Response | null = null;
+        const maxRedirects = 5;
+
+        try {
+            // Safe redirect follower with strict SSRF validation at every hop
+            for (let hop = 0; hop <= maxRedirects; hop++) {
+                let parsedUrl: URL;
+                try {
+                    parsedUrl = new URL(currentUrl);
+                } catch {
+                    return NextResponse.json(
+                        { success: false, error: { code: 'INVALID_URL', message: 'Malformed destination URL.' } },
+                        { status: 400 }
+                    );
+                }
+
+                // SSRF check on this hop
+                const security = await validateUrlSecurity(currentUrl);
+                if (!security.isSafe) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            error: {
+                                code: 'SSRF_VIOLATION',
+                                message: `Security filter blocked access to ${parsedUrl.hostname}: ${security.reason}`,
+                            },
+                        },
+                        { status: 403 }
+                    );
+                }
+
+                const upstreamHeaders = getUpstreamHeaders(parsedUrl, req.headers.get('range'));
+
+                response = await fetch(currentUrl, {
+                    method: 'GET',
+                    headers: upstreamHeaders,
+                    redirect: 'manual',
+                    signal: AbortSignal.timeout(45000),
+                });
+
+                // Handle redirect status codes
+                if ([301, 302, 303, 307, 308].includes(response.status)) {
+                    const location = response.headers.get('location');
+                    if (!location) {
+                        return NextResponse.json(
+                            { success: false, error: { code: 'REDIRECT_ERROR', message: 'Redirect missing Location header.' } },
+                            { status: 502 }
+                        );
+                    }
+                    currentUrl = new URL(location, currentUrl).toString();
+                    continue;
+                }
+
+                // Reached final destination
+                break;
+            }
+
+            if (!response) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'FETCH_FAILED', message: 'No response from upstream host.' } },
+                    { status: 502 }
+                );
+            }
+
+                // Check upstream status (support 200 OK and 206 Partial Content)
+                if (!response.ok && response.status !== 206) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            error: {
+                                code: 'UPSTREAM_ERROR',
+                                message: `The upstream media host returned error HTTP ${response.status}. The media link may be expired, private, or restricted.`,
+                                status: response.status,
+                            },
+                        },
+                        { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
+                    );
+                }
+
+                    // Determine and normalize content type
+                    let rawContentType = response.headers.get('content-type') || '';
+                    let cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
+
+                    // Deduce extensions
+                    let extFromMime = getExtensionFromMime(cleanContentType);
+                    let extFromFilename = (customFilename.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase();
+
+                    // If upstream returns generic binary or octet-stream, infer from filename extension
+                    if (
+                        (!cleanContentType ||
+                            cleanContentType === 'application/octet-stream' ||
+                            cleanContentType === 'binary/octet-stream') &&
+                        extFromFilename
+                    ) {
+                        cleanContentType = getMimeFromExtension(extFromFilename);
+                        extFromMime = extFromFilename;
+                    }
+
+                        // Fallback if still unknown
+                        if (!cleanContentType) {
+                            cleanContentType = 'application/octet-stream';
+                        }
+
+                        // Security check: MIME must be allowed media/document
+                        if (!isAllowedMimeType(cleanContentType)) {
+                            return NextResponse.json(
+                                {
+                                    success: false,
+                                    error: {
+                                        code: 'UNALLOWED_MIME',
+                                        message: `The requested file type (${cleanContentType}) is not permitted.`,
+                                    },
+                                },
+                                { status: 415 }
+                            );
+                        }
+
+                        // Safe filename with guaranteed correct extension
+                        let safeFilename = sanitizeFilename(customFilename, 'download');
+                        if (!safeFilename.includes('.') && extFromMime && extFromMime !== 'bin') {
+                            safeFilename = `${safeFilename}.${extFromMime}`;
+                        }
+
+                        // RFC 6266 / RFC 5987 compliant Content-Disposition
+                        const cleanAscii = safeFilename.replace(/[^\x20-\x7E]/g, '_');
+                        const utf8Encoded = encodeURIComponent(safeFilename);
+                        const contentDisposition = `attachment; filename="${cleanAscii}"; filename*=UTF-8''${utf8Encoded}`;
+
+                        const headers = new Headers();
+                        headers.set('Content-Disposition', contentDisposition);
+                        headers.set('Content-Type', cleanContentType);
+                        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+                        headers.set('Accept-Ranges', 'bytes');
+
+                        // Only set Content-Length if not compressed by upstream/undici
+                        const contentLength = response.headers.get('content-length');
+                        const contentEncoding = response.headers.get('content-encoding');
+                        if (contentLength && !contentEncoding) {
+                            headers.set('Content-Length', contentLength);
+                        }
+
+                        const contentRange = response.headers.get('content-range');
+                        if (contentRange && response.status === 206) {
+                            headers.set('Content-Range', contentRange);
+                            return new NextResponse(response.body as ReadableStream, {
+                                status: 206,
+                                headers,
+                            });
+                        }
+
+                        return new NextResponse(response.body as ReadableStream, {
+                            status: 200,
+                            headers,
+                        });
+                    } catch (err) {
+                        return NextResponse.json(
+                            {
+                                success: false,
+                                error: {
+                                    code: 'STREAM_FAILED',
+                                    message: `Download stream failed: ${(err as Error).message}`,
+                                },
+                            },
+                            { status: 502 }
+                        );
+                    }
+                }

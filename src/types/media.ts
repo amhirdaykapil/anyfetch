@@ -25,6 +25,7 @@ export interface MediaFormatOption {
   requiresProxy?: boolean;
   hasAudio?: boolean;
   isVideoOnly?: boolean;
+  category?: 'video' | 'audio' | 'thumbnail' | 'image';
 }
 
 export interface GalleryItem {
@@ -64,6 +65,7 @@ export interface MediaResult {
     height: number;
   };
   formats: MediaFormatOption[];
+  thumbnails?: MediaFormatOption[];
   gallery?: GalleryItem[];
   complianceNotice?: string;
   officialViewUrl?: string;

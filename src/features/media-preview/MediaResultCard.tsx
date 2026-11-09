@@ -14,6 +14,7 @@ import {
     AlertCircle,
     Clock,
     Sparkles,
+    Volume2,
 } from 'lucide-react';
 import { MediaResult, MediaFormatOption, GalleryItem } from '@/types/media';
 import { getPlatformIcon } from '@/components/PlatformIcons';
@@ -28,6 +29,7 @@ interface MediaResultCardProps {
 export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardProps) {
     const [copiedUrl, setCopiedUrl] = useState(false);
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
     const [selectedFormatId, setSelectedFormatId] = useState<string>(
         result.formats[0]?.id || ''
     );
@@ -40,21 +42,72 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
         setTimeout(() => setCopiedUrl(false), 2000);
     };
 
-    const handleDownload = (format: MediaFormatOption) => {
+    const handleDownload = async (format: MediaFormatOption) => {
         setDownloadingId(format.id);
+        setDownloadError(null);
         if (onDownloadStarted) {
             onDownloadStarted(format);
         }
 
-        // Trigger download via hidden anchor
-        const link = document.createElement('a');
-        link.href = format.downloadUrl;
-        link.download = '';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+            // Deduce expected clean filename
+            let expectedFilename = `${result.title || 'media_download'}.${format.format}`;
+            try {
+                const u = new URL(format.downloadUrl, window.location.origin);
+                const fn = u.searchParams.get('filename');
+                if (fn) expectedFilename = decodeURIComponent(fn);
+            } catch {
+                // Fallback
+            }
 
-        setTimeout(() => setDownloadingId(null), 2500);
+            if (format.downloadUrl.startsWith('/api/download')) {
+                const res = await fetch(format.downloadUrl, { method: 'GET' });
+
+                if (!res.ok) {
+                    let errorMsg = `Server returned HTTP ${res.status}`;
+                    try {
+                        const json = await res.json();
+                        if (json?.error?.message) {
+                            errorMsg = json.error.message;
+                        }
+                    } catch {
+                        // Not JSON
+                    }
+                    setDownloadError(errorMsg);
+                    setDownloadingId(null);
+                    return;
+                }
+
+                // Parse content-disposition header if available
+                const disposition = res.headers.get('content-disposition');
+                if (disposition && disposition.includes('filename=')) {
+                    const match = disposition.match(/filename=["']?([^"';]+)["']?/i);
+                    if (match && match[1]) expectedFilename = match[1];
+                }
+
+                const blob = await res.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.download = expectedFilename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => window.URL.revokeObjectURL(blobUrl), 15000);
+            } else {
+                const link = document.createElement('a');
+                link.href = format.downloadUrl;
+                link.download = expectedFilename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (err) {
+            setDownloadError(`Download failed: ${(err as Error).message}`);
+        } finally {
+            setTimeout(() => setDownloadingId(null), 1000);
+        }
     };
 
     const getMediaIcon = () => {
@@ -229,82 +282,181 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                                 </span>
                             </div>
 
+                            {/* Download Error Banner */}
+                            {downloadError && (
+                                <div className="mb-3 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400">
+                                    <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                        <p className="font-medium">{downloadError}</p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Formats List */}
-                            <div className="space-y-2">
-                                {result.formats.map((format) => {
-                                    const isDownloading = downloadingId === format.id;
-                                    const isSelected = selectedFormatId === format.id;
-
-                                    return (
-                                        <div
-                                            key={format.id}
-                                            onClick={() => setSelectedFormatId(format.id)}
-                                            className={`group flex items-center justify-between rounded-xl border p-3 transition-all cursor-pointer ${isSelected
-                                                    ? 'border-zinc-900 bg-zinc-50/80 dark:border-zinc-400 dark:bg-zinc-900/60'
-                                                    : 'border-zinc-200/80 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 dark:border-white/[0.06] dark:bg-zinc-900/20 dark:hover:border-white/[0.12] dark:hover:bg-zinc-900/50'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 font-mono text-xs font-bold uppercase text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                                                    {format.format}
+                                    {
+                                        result.formats.length === 0 ? (
+                                            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-700 dark:text-amber-400">
+                                                <div className="flex items-center gap-2 font-semibold">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    <span>Direct stream extraction restricted by platform</span>
                                                 </div>
-
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
-                                                            {format.label}
-                                                        </span>
-                                                        <span className="rounded bg-zinc-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                                                            {format.quality}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                                                        {format.resolution && <span>{format.resolution}</span>}
-                                                        {format.resolution && format.fileSizeFormatted && <span>•</span>}
-                                                        {format.fileSizeFormatted && <span>{format.fileSizeFormatted}</span>}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Download Action Button */}
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDownload(format);
-                                                }}
-                                                disabled={isDownloading}
-                                                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-zinc-800 active:scale-95 disabled:opacity-75 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                                            >
-                                                {isDownloading ? (
-                                                    <>
-                                                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                                        <span>Saving...</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Download className="h-3.5 w-3.5" />
-                                                        <span>Download</span>
-                                                    </>
+                                                <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                                                    Platform policies restrict direct video downloads for this item. Master artwork and thumbnails can still be downloaded below, or you may view the original media directly on {result.platformName}.
+                                                </p>
+                                                {result.officialViewUrl && (
+                                                    <a
+                                                        href={result.officialViewUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-700 transition"
+                                                    >
+                                                        <span>Open on {result.platformName}</span>
+                                                        <ExternalLink className="h-3.5 w-3.5" />
+                                                    </a>
                                                 )}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                                            </div>
+                                        ) : (
+                                        <div className="space-y-2">
+                                            {result.formats.map((format) => {
+                                                const isDownloading = downloadingId === format.id;
+                                                const isSelected = selectedFormatId === format.id;
 
-                        {/* Compliance Banner */}
-                        {result.complianceNotice && (
-                            <div className="mt-4 flex items-start gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-3 text-[11px] text-zinc-600 dark:border-white/[0.06] dark:bg-zinc-900/30 dark:text-zinc-400">
-                                <ShieldCheck className="h-4 w-4 flex-shrink-0 text-emerald-500 mt-0.5" />
-                                <p className="leading-relaxed">{result.complianceNotice}</p>
-                            </div>
-                        )}
+                                        return (
+                                                                <div
+                                                                    key={format.id}
+                                                                    onClick={() => setSelectedFormatId(format.id)}
+                                                                    className={`group flex items-center justify-between rounded-xl border p-3 transition-all cursor-pointer ${isSelected
+                                                                            ? 'border-zinc-900 bg-zinc-50/80 dark:border-zinc-400 dark:bg-zinc-900/60'
+                                                                            : 'border-zinc-200/80 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 dark:border-white/[0.06] dark:bg-zinc-900/20 dark:hover:border-white/[0.12] dark:hover:bg-zinc-900/50'
+                                                                        }`}
+                                            >
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 font-mono text-xs font-bold uppercase text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                                                                                        {format.format}
+                                                                                    </div>
+
+                                                                                        <div>
+                                                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                                                <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                                                                                    {format.label}
+                                                                                                </span>
+                                                                                                <span className="rounded bg-zinc-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                                                                                    {format.quality}
+                                                                                                </span>
+                                                                                                {format.hasAudio && (
+                                                                                                    <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/10 px-1.5 py-0.2 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                                                                        <Volume2 className="h-2.5 w-2.5" />
+                                                                                                        <span>Audio</span>
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+
+                                                                                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                                                                                {format.resolution && <span>{format.resolution}</span>}
+                                                                                                {format.resolution && format.fileSizeFormatted && <span>•</span>}
+                                                                                                {format.fileSizeFormatted && <span>{format.fileSizeFormatted}</span>}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Download Action Button */}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleDownload(format);
+                                                                                        }}
+                                                                                        disabled={isDownloading}
+                                                                                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-zinc-800 active:scale-95 disabled:opacity-75 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                                                                                    >
+                                                                                        {isDownloading ? (
+                                                                                            <>
+                                                                                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                                                                                <span>Saving...</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Download className="h-3.5 w-3.5" />
+                                                                                                <span>Download</span>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </button>
+                                                                                </div>
+                                                                                );
+                                    })}
+                                                                            </div>
+                            )}
+
+                                                                    {/* Optional Separate Thumbnails & Artwork Section */}
+                                                                    {result.thumbnails && result.thumbnails.length > 0 && (
+                                                                        <div className="mt-5 border-t border-zinc-200/80 pt-4 dark:border-white/[0.08]">
+                                                                            <div className="mb-2 flex items-center justify-between">
+                                                                                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                                                                    Thumbnails & Poster Artwork ({result.thumbnails.length})
+                                                                                </span>
+                                                                                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                                                                    Original Master Resolutions
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="space-y-1.5">
+                                                                                {result.thumbnails.map((thumb) => {
+                                                                                    const isDownloading = downloadingId === thumb.id;
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={thumb.id}
+                                                                                            className="flex items-center justify-between rounded-xl border border-zinc-200/70 bg-zinc-50/40 p-2.5 transition-all hover:border-zinc-300 dark:border-white/[0.06] dark:bg-zinc-900/20 dark:hover:border-white/[0.12]"
+                                                                                        >
+                                                                                            <div className="flex items-center gap-2.5">
+                                                                                                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-200/60 font-mono text-[10px] font-bold uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                                                                                    JPG
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <div className="text-xs font-medium text-zinc-900 dark:text-zinc-200">
+                                                                                                        {thumb.label}
+                                                                                                    </div>
+                                                                                                    <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                                                                                        {thumb.resolution || thumb.quality}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => handleDownload(thumb)}
+                                                                                                disabled={isDownloading}
+                                                                                                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100 disabled:opacity-75 dark:border-white/[0.1] dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                                                                                            >
+                                                                                                {isDownloading ? (
+                                                                                                    <>
+                                                                                                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                                                                                        <span>Saving...</span>
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <>
+                                                                                                        <Download className="h-3 w-3" />
+                                                                                                        <span>Download</span>
+                                                                                                    </>
+                                                                                                )}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                        {/* Compliance Banner */ }
+                        {
+                                                                    result.complianceNotice && (
+                                                                        <div className="mt-4 flex items-start gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-3 text-[11px] text-zinc-600 dark:border-white/[0.06] dark:bg-zinc-900/30 dark:text-zinc-400">
+                                                                            <ShieldCheck className="h-4 w-4 flex-shrink-0 text-emerald-500 mt-0.5" />
+                                                                            <p className="leading-relaxed">{result.complianceNotice}</p>
+                                                                        </div>
+                                                                    )
+                                                                }
                     </div>
                 </div>
-            </div>
-        </div>
-    );
+                        </div>
+                    </div>
+                    );
 }
