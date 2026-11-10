@@ -162,14 +162,26 @@ export class RedditAdapter implements PlatformAdapter {
         if (host === 'redd.it' || parsed.pathname.includes('/s/')) {
             try {
                 const head = await fetch(url, {
-                    method: 'HEAD',
-                    redirect: 'follow',
+                    method: 'GET',
+                    redirect: 'manual',
                     headers: { 'User-Agent': 'facebookexternalhit/1.1' },
                     signal: AbortSignal.timeout(6000),
                 });
-                if (head.url && head.url !== url) {
-                    targetUrl = head.url;
+                const loc = head.headers.get('location');
+                if (loc) {
+                    targetUrl = new URL(loc, url).toString();
                     parsed = new URL(targetUrl);
+                } else {
+                    const follow = await fetch(url, {
+                        method: 'HEAD',
+                        redirect: 'follow',
+                        headers: { 'User-Agent': 'facebookexternalhit/1.1' },
+                        signal: AbortSignal.timeout(6000),
+                    });
+                    if (follow.url && follow.url !== url) {
+                        targetUrl = follow.url;
+                        parsed = new URL(targetUrl);
+                    }
                 }
             } catch {
                 // Continue with original URL
@@ -187,99 +199,309 @@ export class RedditAdapter implements PlatformAdapter {
         if (token) {
             const postPath = parsed.pathname.replace(/\/$/, '');
             const requestUrl = `https://oauth.reddit.com${postPath}.json?raw_json=1`;
-            const jsonRes = await fetch(requestUrl, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                    'User-Agent': process.env.REDDIT_USER_AGENT?.trim() || 'web:omnifetch:v2.5 (by /u/omnifetch_bot)',
-                },
-                signal: AbortSignal.timeout(8000),
-            });
+            try {
+                const jsonRes = await fetch(requestUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'User-Agent': process.env.REDDIT_USER_AGENT?.trim() || 'web:omnifetch:v2.5 (by /u/omnifetch_bot)',
+                    },
+                    signal: AbortSignal.timeout(8000),
+                });
 
-            if (jsonRes.ok) {
-                const data = await jsonRes.json();
-                return this.parseRedditPostJson(data, targetUrl);
-            } else if (jsonRes.status === 404) {
-                throw new ExtractionError('DELETED_POST', 'This Reddit post was deleted or does not exist.', { officialUrl: targetUrl });
-            } else if (jsonRes.status === 403) {
-                throw new ExtractionError('PRIVATE_CONTENT', 'This Reddit post belongs to a private subreddit or community.', { officialUrl: targetUrl });
-            } else if (jsonRes.status === 429) {
-                throw new ExtractionError('RATE_LIMITED', 'Reddit OAuth API rate limit reached. Please try again in a few moments.', { officialUrl: targetUrl });
+                if (jsonRes.ok) {
+                    const data = await jsonRes.json();
+                    return this.parseRedditPostJson(data, targetUrl);
+                } else if (jsonRes.status === 404) {
+                    throw new ExtractionError('DELETED_POST', 'This Reddit post was deleted or does not exist.', { officialUrl: targetUrl });
+                } else if (jsonRes.status === 403) {
+                    throw new ExtractionError('PRIVATE_CONTENT', 'This Reddit post belongs to a private subreddit or community.', { officialUrl: targetUrl });
+                } else if (jsonRes.status === 429) {
+                    throw new ExtractionError('RATE_LIMITED', 'Reddit OAuth API rate limit reached. Please try again in a few moments.', { officialUrl: targetUrl });
+                }
+            } catch (err) {
+                if (err instanceof ExtractionError) throw err;
+                // Otherwise fall through to robust public web extraction
             }
         }
 
-        // 4. Fallback: Public web crawler resolution using social agent headers
-        try {
-            const htmlRes = await fetch(targetUrl, {
+        // 4. Public Web Resolution without credentials
+        return await this.extractPublicRedditPost(url, targetUrl, parsed);
+    }
+
+    private async extractPublicRedditPost(originalUrl: string, targetUrl: string, parsed: URL): Promise<MediaResult> {
+        const subMatch = parsed.pathname.match(/\/r\/([a-zA-Z0-9_]+)/i);
+        const subreddit = subMatch ? subMatch[1] : 'reddit';
+        const postMatch = parsed.pathname.match(/\/comments\/([a-zA-Z0-9]+)/i);
+        const postId = postMatch ? postMatch[1] : '';
+        const canonicalUrl = postId
+            ? `https://www.reddit.com/r/${subreddit}/comments/${postId}/`
+            : targetUrl.split('?')[0];
+
+        let oembedTitle = '';
+        let oembedAuthor = '';
+
+        const [oembedRes, embedRes, socialRes] = await Promise.allSettled([
+            fetch(`https://www.reddit.com/oembed?url=${encodeURIComponent(canonicalUrl)}`, {
+                signal: AbortSignal.timeout(6000),
+            }),
+            postId ? fetch(`https://embed.reddit.com/r/${subreddit}/comments/${postId}/`, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml',
+                },
+                signal: AbortSignal.timeout(7000),
+            }) : Promise.resolve(null as any),
+            fetch(targetUrl, {
                 headers: {
                     'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
                     'Accept': 'text/html,application/xhtml+xml',
                 },
-                signal: AbortSignal.timeout(8000),
-            });
+                signal: AbortSignal.timeout(7000),
+            }),
+        ]);
 
-            if (htmlRes.status === 404) {
-                throw new ExtractionError('DELETED_POST', 'This Reddit post was deleted or does not exist.', { officialUrl: targetUrl });
+        if (oembedRes.status === 'fulfilled' && oembedRes.value && oembedRes.value.ok) {
+            try {
+                const oData = await oembedRes.value.json();
+                if (oData.title) oembedTitle = decodeHtmlEntities(oData.title);
+                if (oData.author_name) oembedAuthor = `u/${oData.author_name}`;
+            } catch {
+                // Ignore oembed parse failure
             }
-            if (htmlRes.status === 429) {
-                throw new ExtractionError('RATE_LIMITED', 'Reddit rate limit reached. To enable continuous extraction, configure REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in environment variables.', { officialUrl: targetUrl });
-            }
+        }
 
-            if (htmlRes.ok) {
-                const html = await htmlRes.text();
+        let embedHtml = '';
+        let screenPost: { id?: string; url?: string; type?: string; created_timestamp?: number } | null = null;
 
-                // Extract og:title
-                let title = 'Reddit Post';
-                const titleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
-                if (titleMatch && titleMatch[1]) {
-                    title = decodeHtmlEntities(titleMatch[1].replace(/^From the [^:]+ community on Reddit:\s*/i, '').trim());
+        if (embedRes.status === 'fulfilled' && embedRes.value && embedRes.value.ok) {
+            try {
+                embedHtml = await embedRes.value.text();
+                const screenMatch = embedHtml.match(/<shreddit-screenview-data\s+data="([^"]+)"/);
+                if (screenMatch) {
+                    const unescaped = screenMatch[1]
+                        .replace(/&quot;/g, '"')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>');
+                    const parsedData = JSON.parse(unescaped);
+                    screenPost = parsedData.post || null;
                 }
+            } catch {
+                // Ignore embed parse failure
+            }
+        }
 
-                // Extract og:image
-                let ogImage = '';
-                const imgMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+        let socialHtml = '';
+        let ogTitle = '';
+        let ogImage = '';
+        let ogVideo = '';
+
+        if (socialRes.status === 'fulfilled' && socialRes.value && socialRes.value.ok) {
+            try {
+                socialHtml = await socialRes.value.text();
+                const titleMatch = socialHtml.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+                if (titleMatch && titleMatch[1]) {
+                    ogTitle = decodeHtmlEntities(titleMatch[1].replace(/^From the [^:]+ community on Reddit:\s*/i, '').trim());
+                }
+                const imgMatch = socialHtml.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
                 if (imgMatch && imgMatch[1]) {
                     ogImage = imgMatch[1].replace(/&amp;/g, '&');
                 }
-
-                // Check if og:image is a direct i.redd.it image
-                if (ogImage && ogImage.includes('i.redd.it')) {
-                    const cleanTitle = sanitizeFilename(title.substring(0, 50), 'Reddit_Image');
-                    const ext = (ogImage.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase() || 'jpg';
-                    return {
-                        id: `reddit-${Buffer.from(targetUrl).toString('base64url').substring(0, 16)}`,
-                        originalUrl: url,
-                        canonicalUrl: targetUrl,
-                        platform: 'reddit',
-                        platformName: 'Reddit',
-                        title,
-                        mediaType: 'image',
-                        thumbnailUrl: ogImage,
-                        formats: [
-                            {
-                                id: 'reddit-orig-img',
-                                label: `Original High-Res ${ext.toUpperCase()}`,
-                                format: ext,
-                                quality: 'Original Resolution',
-                                downloadUrl: `/api/download?url=${encodeURIComponent(ogImage)}&filename=${encodeURIComponent(`${cleanTitle}.${ext}`)}`,
-                                isDirect: true,
-                                category: 'image',
-                            },
-                        ],
-                        officialViewUrl: targetUrl,
-                        fetchedAt: new Date().toISOString(),
-                    };
+                const vidMatch = socialHtml.match(/<meta\s+property=["']og:video(?::url)?["']\s+content=["']([^"']+)["']/i);
+                if (vidMatch && vidMatch[1]) {
+                    ogVideo = vidMatch[1].replace(/&amp;/g, '&');
                 }
+            } catch {
+                // Ignore social parse failure
             }
-        } catch (err) {
-            if (err instanceof ExtractionError) throw err;
         }
 
-        // If unauthenticated public extraction could not parse media, return specific AUTHENTICATION_REQUIRED error
+        // Title resolution
+        let embedHeading = '';
+        const h1Match = embedHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        if (h1Match && h1Match[1]) {
+            embedHeading = decodeHtmlEntities(h1Match[1].replace(/<[^>]+>/g, '').trim());
+        }
+
+        const title = oembedTitle || embedHeading || ogTitle || 'Reddit Post';
+        const cleanTitle = sanitizeFilename(`r_${subreddit}_${title}`.substring(0, 60), 'Reddit_Media');
+
+        // Check if embed preview images or srcset exist
+        let embedPreviewImg = '';
+        const imgMatch = embedHtml.match(/<img[^>]+class="[^"]*object-contain[^"]*"[^>]+src="([^"]+)"/i)
+            || embedHtml.match(/<img[^>]+src="([^"]+)"[^>]+class="[^"]*object-contain[^"]*"/i);
+        if (imgMatch && imgMatch[1]) {
+            embedPreviewImg = imgMatch[1].replace(/&amp;/g, '&');
+        }
+
+        // Primary media resolution
+        const postUrl = screenPost?.url;
+        const postType = screenPost?.type;
+
+        // CASE 1: Video Post (via shreddit-screenview-data or og:video or v.redd.it)
+        if (postType === 'video' || (postUrl && postUrl.includes('v.redd.it')) || ogVideo || embedHtml.includes('v.redd.it')) {
+            let videoId = '';
+            if (postUrl && postUrl.includes('v.redd.it')) {
+                videoId = postUrl.split('/').filter(Boolean).pop() || '';
+            }
+            if (!videoId && ogVideo) {
+                const vm = ogVideo.match(/v\.redd\.it\/([a-zA-Z0-9]+)/);
+                if (vm) videoId = vm[1];
+            }
+            if (!videoId) {
+                const vm = embedHtml.match(/https?:\/\/v\.redd\.it\/([a-zA-Z0-9]+)/);
+                if (vm) videoId = vm[1];
+            }
+
+            if (videoId) {
+                const video720 = `https://v.redd.it/${videoId}/DASH_720.mp4`;
+                const video1080 = `https://v.redd.it/${videoId}/DASH_1080.mp4`;
+                const video480 = `https://v.redd.it/${videoId}/DASH_480.mp4`;
+                const audioUrl = `https://v.redd.it/${videoId}/DASH_AUDIO_128.mp4`;
+                const thumb = ogImage || embedPreviewImg || `https://v.redd.it/${videoId}/DASH_360.mp4`;
+
+                const formats: MediaFormatOption[] = [
+                    {
+                        id: 'reddit-v-1080',
+                        label: 'Full HD Video (1080p MP4)',
+                        format: 'mp4',
+                        quality: '1080p Full HD',
+                        downloadUrl: `/api/download?url=${encodeURIComponent(video1080)}&filename=${encodeURIComponent(`${cleanTitle}_1080p.mp4`)}`,
+                        hasAudio: false,
+                        category: 'video',
+                    },
+                    {
+                        id: 'reddit-v-720',
+                        label: 'HD Video (720p MP4)',
+                        format: 'mp4',
+                        quality: '720p HD',
+                        downloadUrl: `/api/download?url=${encodeURIComponent(video720)}&filename=${encodeURIComponent(`${cleanTitle}_720p.mp4`)}`,
+                        hasAudio: false,
+                        category: 'video',
+                    },
+                    {
+                        id: 'reddit-v-480',
+                        label: 'SD Video (480p MP4)',
+                        format: 'mp4',
+                        quality: '480p SD',
+                        downloadUrl: `/api/download?url=${encodeURIComponent(video480)}&filename=${encodeURIComponent(`${cleanTitle}_480p.mp4`)}`,
+                        hasAudio: false,
+                        category: 'video',
+                    },
+                    {
+                        id: 'reddit-audio',
+                        label: 'Extracted Master Audio (M4A / MP3)',
+                        format: 'm4a',
+                        quality: '128 kbps',
+                        downloadUrl: `/api/download?url=${encodeURIComponent(audioUrl)}&filename=${encodeURIComponent(`${cleanTitle}_audio.m4a`)}`,
+                        hasAudio: true,
+                        category: 'audio',
+                    },
+                ];
+
+                const thumbnails: MediaFormatOption[] = thumb ? [
+                    {
+                        id: 'reddit-v-thumb',
+                        label: 'Video Poster Artwork (JPG)',
+                        format: 'jpg',
+                        quality: 'Preview Poster',
+                        downloadUrl: `/api/download?url=${encodeURIComponent(thumb)}&filename=${encodeURIComponent(`${cleanTitle}_poster.jpg`)}`,
+                        category: 'thumbnail',
+                    }
+                ] : [];
+
+                return {
+                    id: `reddit-${postId || Buffer.from(targetUrl).toString('base64url').substring(0, 12)}`,
+                    originalUrl,
+                    canonicalUrl,
+                    platform: 'reddit',
+                    platformName: 'Reddit',
+                    title,
+                    author: {
+                        name: oembedAuthor || `r/${subreddit}`,
+                        username: oembedAuthor,
+                        profileUrl: oembedAuthor ? `https://reddit.com/${oembedAuthor}` : `https://reddit.com/r/${subreddit}`,
+                    },
+                    mediaType: 'video',
+                    thumbnailUrl: thumb,
+                    formats,
+                    thumbnails: thumbnails.length > 0 ? thumbnails : undefined,
+                    officialViewUrl: canonicalUrl,
+                    fetchedAt: new Date().toISOString(),
+                };
+            }
+        }
+
+        // CASE 2: Image Post (via postUrl or ogImage or embedPreviewImg)
+        let resolvedImageUrl = '';
+        if (postUrl && (postUrl.includes('i.redd.it') || /\.(jpg|jpeg|png|webp|gif)$/i.test(postUrl))) {
+            resolvedImageUrl = postUrl;
+        } else if (ogImage && (ogImage.includes('i.redd.it') || ogImage.includes('share.redd.it') || ogImage.includes('preview.redd.it'))) {
+            resolvedImageUrl = ogImage;
+        } else if (embedPreviewImg) {
+            resolvedImageUrl = embedPreviewImg;
+        }
+
+        if (resolvedImageUrl) {
+            const extMatch = resolvedImageUrl.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+            const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+            const thumbUrl = ogImage || embedPreviewImg || resolvedImageUrl;
+
+            const formats: MediaFormatOption[] = [
+                {
+                    id: 'reddit-orig-img',
+                    label: `Original High-Res ${ext.toUpperCase()}`,
+                    format: ext,
+                    quality: 'Original Resolution',
+                    downloadUrl: `/api/download?url=${encodeURIComponent(resolvedImageUrl)}&filename=${encodeURIComponent(`${cleanTitle}.${ext}`)}`,
+                    isDirect: true,
+                    category: 'image',
+                },
+            ];
+
+            const thumbnails: MediaFormatOption[] = [];
+            if (thumbUrl && thumbUrl !== resolvedImageUrl) {
+                thumbnails.push({
+                    id: 'reddit-thumb-img',
+                    label: 'Preview Poster Artwork (JPG)',
+                    format: 'jpg',
+                    quality: 'Preview Quality',
+                    downloadUrl: `/api/download?url=${encodeURIComponent(thumbUrl)}&filename=${encodeURIComponent(`${cleanTitle}_preview.jpg`)}`,
+                    category: 'thumbnail',
+                });
+            }
+
+            return {
+                id: `reddit-${postId || Buffer.from(targetUrl).toString('base64url').substring(0, 12)}`,
+                originalUrl,
+                canonicalUrl,
+                platform: 'reddit',
+                platformName: 'Reddit',
+                title,
+                author: {
+                    name: oembedAuthor || `r/${subreddit}`,
+                    username: oembedAuthor,
+                    profileUrl: oembedAuthor ? `https://reddit.com/${oembedAuthor}` : `https://reddit.com/r/${subreddit}`,
+                },
+                mediaType: 'image',
+                thumbnailUrl: thumbUrl,
+                formats,
+                thumbnails: thumbnails.length > 0 ? thumbnails : undefined,
+                officialViewUrl: canonicalUrl,
+                fetchedAt: new Date().toISOString(),
+            };
+        }
+
+        // If no media was found at all:
+        if (socialRes.status === 'fulfilled' && socialRes.value && socialRes.value.status === 404) {
+            throw new ExtractionError('DELETED_POST', 'This Reddit post was deleted or does not exist.', { officialUrl: targetUrl });
+        }
+
         throw new ExtractionError(
-            'AUTHENTICATION_REQUIRED',
-            'Reddit requires developer credentials or an active account to access this post. Direct image and video links (i.redd.it, v.redd.it) are supported without credentials. To enable full post extraction, configure REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET.',
-            { officialUrl: targetUrl }
+            'NO_MEDIA_FOUND',
+            'This Reddit post contains text only and does not contain downloadable media.',
+            { officialUrl: canonicalUrl }
         );
     }
 
