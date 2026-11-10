@@ -12,6 +12,13 @@ export type PlatformId =
 
 export type MediaType = 'video' | 'image' | 'gallery' | 'audio' | 'document';
 
+export type MediaSourceType =
+  | 'ORIGINAL_IMAGE'
+  | 'ORIGINAL_VIDEO'
+  | 'VIDEO_THUMBNAIL'
+  | 'POST_PREVIEW'
+  | 'OG_IMAGE';
+
 export interface MediaFormatOption {
   id: string;
   label: string;
@@ -26,6 +33,7 @@ export interface MediaFormatOption {
   hasAudio?: boolean;
   isVideoOnly?: boolean;
   category?: 'video' | 'audio' | 'thumbnail' | 'image';
+  sourceType?: MediaSourceType;
 }
 
 export interface GalleryItem {
@@ -38,6 +46,7 @@ export interface GalleryItem {
   resolution?: string;
   format: string;
   fileSizeFormatted?: string;
+  sourceType?: MediaSourceType;
 }
 
 export interface MediaResult {
