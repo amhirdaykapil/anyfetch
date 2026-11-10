@@ -97,18 +97,24 @@ export async function GET(req: NextRequest) {
 
         const stream = new ReadableStream({
             async pull(controller) {
-                if (bytesSent >= totalSize) {
-                    controller.close();
-                    return;
+                try {
+                    if (bytesSent >= totalSize) {
+                        try { controller.close(); } catch {}
+                        return;
+                    }
+                    const remaining = totalSize - bytesSent;
+                    const thisChunk = Math.min(chunkSize, remaining);
+                    const chunkData = new Uint8Array(thisChunk);
+                    chunkData.fill(65);
+                    controller.enqueue(chunkData);
+                    bytesSent += thisChunk;
+                    await new Promise((r) => setTimeout(r, 12));
+                } catch {
+                    // Client disconnected or stream closed
                 }
-                const remaining = totalSize - bytesSent;
-                const thisChunk = Math.min(chunkSize, remaining);
-                const chunkData = new Uint8Array(thisChunk);
-                chunkData.fill(65);
-                controller.enqueue(chunkData);
-                bytesSent += thisChunk;
-                // Realistic chunk pacing
-                await new Promise((r) => setTimeout(r, 12));
+            },
+            cancel() {
+                // Client aborted
             },
         });
 
