@@ -187,11 +187,40 @@ export async function GET(req: NextRequest) {
 
         try {
             const child = spawn(/*turbopackIgnore: true*/ PYTHON_BIN, args, { stdio: ['ignore', 'pipe', 'ignore'] });
-            req.signal.addEventListener('abort', () => {
-                child.kill();
-            });
+            
+            const cleanup = () => {
+                try {
+                    child.kill();
+                } catch {}
+            };
 
-            const webStream = Readable.toWeb(child.stdout);
+            req.signal.addEventListener('abort', cleanup);
+
+            const webStream = new ReadableStream({
+                start(controller) {
+                    child.stdout.on('data', (chunk: Buffer) => {
+                        try {
+                            controller.enqueue(new Uint8Array(chunk));
+                        } catch {
+                            cleanup();
+                        }
+                    });
+                    child.stdout.on('end', () => {
+                        try {
+                            controller.close();
+                        } catch {}
+                    });
+                    child.stdout.on('error', (err) => {
+                        try {
+                            controller.error(err);
+                        } catch {}
+                        cleanup();
+                    });
+                },
+                cancel() {
+                    cleanup();
+                },
+            });
             const headers = new Headers();
             headers.set(
                 'Content-Disposition',
