@@ -45,3 +45,22 @@ export function timeAgo(dateString: string): string {
     if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+export function sanitizeFilename(name: string, fallback = 'download'): string {
+    if (!name || typeof name !== 'string') return fallback;
+
+    let clean = name
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+        .replace(/\s+/g, '_')
+        .trim();
+
+    clean = clean.replace(/^\.+/, '');
+    if (!clean) clean = fallback;
+
+    if (clean.length > 80) {
+        clean = clean.substring(0, 80);
+    }
+
+    return clean;
+}
+

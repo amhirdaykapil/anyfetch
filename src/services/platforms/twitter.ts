@@ -140,13 +140,20 @@ export class TwitterAdapter implements PlatformAdapter {
                 if (!rawUrl) continue;
                 const origUrl = rawUrl.includes('?') ? `${rawUrl}&name=orig` : `${rawUrl}?name=orig`;
 
+                const slideNum = String(i + 1).padStart(2, '0');
+                const dlUrl = `/api/download?url=${encodeURIComponent(origUrl)}&filename=${encodeURIComponent(`OmniFetch_Slide_${slideNum}.jpg`)}`;
+                const resolution = photo.width && photo.height ? `${photo.width} × ${photo.height}` : undefined;
+
                 gallery.push({
-                    id: `photo-${i}`,
+                    id: `photo-${i + 1}`,
+                    position: i + 1,
                     type: 'image',
-                    url: `/api/download?url=${encodeURIComponent(origUrl)}&filename=${encodeURIComponent(`${cleanTitle}_photo_${i + 1}.jpg`)}`,
+                    url: origUrl,
+                    downloadUrl: dlUrl,
                     thumbnailUrl: rawUrl,
                     width: photo.width,
                     height: photo.height,
+                    resolution,
                     format: 'jpg',
                 });
 
@@ -156,8 +163,9 @@ export class TwitterAdapter implements PlatformAdapter {
                         id: 'x-photo-primary',
                         label: items.length > 1 ? `Primary Photo (1 of ${items.length})` : 'Original Photo (High-Res)',
                         format: 'jpg',
-                        quality: 'Original Maximum Quality',
-                        downloadUrl: `/api/download?url=${encodeURIComponent(origUrl)}&filename=${encodeURIComponent(`${cleanTitle}_photo_1.jpg`)}`,
+                        quality: resolution || 'Original Maximum Quality',
+                        resolution,
+                        downloadUrl: dlUrl,
                         category: 'image',
                     });
                 }

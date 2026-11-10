@@ -38,15 +38,20 @@ export interface MediaFormatOption {
 
 export interface GalleryItem {
   id: string;
+  position: number;
   type: 'image' | 'video';
   url: string;
+  downloadUrl: string;
   thumbnailUrl?: string;
   width?: number;
   height?: number;
   resolution?: string;
   format: string;
+  fileSize?: number;
   fileSizeFormatted?: string;
+  hasAudio?: boolean;
   sourceType?: MediaSourceType;
+  title?: string;
 }
 
 export interface MediaResult {

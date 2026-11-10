@@ -102,6 +102,71 @@ export class InstagramAdapter implements PlatformAdapter {
 
                             if (rapidApiRes.ok) {
                                 const data = await rapidApiRes.json();
+                                const rawCarousel =
+                                    data.carousel_media ||
+                                    data.sidecar ||
+                                    data.medias ||
+                                    (Array.isArray(data.children) ? data.children : data.children?.data) ||
+                                    (Array.isArray(data.items) ? data.items : null) ||
+                                    (Array.isArray(data.media) ? data.media : null);
+
+                                if (Array.isArray(rawCarousel) && rawCarousel.length > 1) {
+                                    const title = decodeHtmlEntities(data.title || `Instagram Carousel Post (${shortcode})`);
+                                    const cleanTitle = sanitizeFilename(title.substring(0, 50), `Instagram_${shortcode}`);
+                                    const gallery: GalleryItem[] = [];
+                                    const formats: MediaFormatOption[] = [];
+
+                                    for (let idx = 0; idx < rawCarousel.length; idx++) {
+                                        const cItem = rawCarousel[idx];
+                                        const itemUrl = cItem.url || cItem.media || cItem.download_url || cItem.display_url || cItem.video_url;
+                                        if (!itemUrl) continue;
+                                        const isItemVid = Boolean(cItem.is_video || cItem.type === 'video' || itemUrl.includes('.mp4'));
+                                        const ext = isItemVid ? 'mp4' : 'jpg';
+                                        const slideNum = String(idx + 1).padStart(2, '0');
+                                        const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                                        const thumb = cItem.thumbnail || cItem.display_url || cItem.thumbnailUrl || itemUrl;
+
+                                        gallery.push({
+                                            id: `ig-carousel-${idx + 1}`,
+                                            position: idx + 1,
+                                            type: isItemVid ? 'video' : 'image',
+                                            url: itemUrl,
+                                            downloadUrl: `/api/download?url=${encodeURIComponent(itemUrl)}&filename=${encodeURIComponent(dlFilename)}`,
+                                            thumbnailUrl: thumb,
+                                            format: ext,
+                                            hasAudio: isItemVid,
+                                            sourceType: isItemVid ? 'ORIGINAL_VIDEO' : 'ORIGINAL_IMAGE',
+                                        });
+
+                                        formats.push({
+                                            id: `ig-slide-${idx + 1}`,
+                                            label: `Slide ${slideNum} (${ext.toUpperCase()} ${isItemVid ? 'Video' : 'Photo'})`,
+                                            format: ext,
+                                            quality: 'Original Resolution',
+                                            downloadUrl: `/api/download?url=${encodeURIComponent(itemUrl)}&filename=${encodeURIComponent(dlFilename)}`,
+                                            category: isItemVid ? 'video' : 'image',
+                                            hasAudio: isItemVid,
+                                        });
+                                    }
+
+                                    if (gallery.length > 0) {
+                                        return {
+                                            id: `instagram-${shortcode}`,
+                                            originalUrl: url,
+                                            canonicalUrl,
+                                            platform: 'instagram',
+                                            platformName: 'Instagram Carousel',
+                                            title,
+                                            mediaType: 'gallery',
+                                            thumbnailUrl: gallery[0].thumbnailUrl || gallery[0].url,
+                                            formats,
+                                            gallery,
+                                            officialViewUrl: canonicalUrl,
+                                            fetchedAt: new Date().toISOString(),
+                                        };
+                                    }
+                                }
+
                                 const mediaUrl = data.media || data.download_url || data.url;
                                 const thumbnail = data.thumbnail || data.display_url || mediaUrl;
                                 const isVid = Boolean(data.is_video || (mediaUrl && mediaUrl.includes('.mp4')) || isReel);
@@ -251,6 +316,73 @@ export class InstagramAdapter implements PlatformAdapter {
 
                     if (socialRes.ok) {
                         const html = await socialRes.text();
+
+                            // Check for carousel / multi-media in HTML
+                            const htmlGallery: GalleryItem[] = [];
+                            const sidecarMatch = html.match(/"edge_sidecar_to_children":\s*\{\s*"edges":\s*(\[[^\]]+\])/);
+                            if (sidecarMatch && sidecarMatch[1]) {
+                                try {
+                                    const edges = JSON.parse(sidecarMatch[1]);
+                                    if (Array.isArray(edges) && edges.length > 1) {
+                                        for (let idx = 0; idx < edges.length; idx++) {
+                                            const node = edges[idx]?.node;
+                                            if (!node) continue;
+                                            const itemIsVid = Boolean(node.is_video || node.__typename === 'GraphVideo');
+                                            const itemUrl = itemIsVid ? (node.video_url || node.display_url) : node.display_url;
+                                            if (!itemUrl) continue;
+                                            const ext = itemIsVid ? 'mp4' : 'jpg';
+                                            const slideNum = String(idx + 1).padStart(2, '0');
+                                            const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                                            const res = node.dimensions?.width && node.dimensions?.height ? `${node.dimensions.width} × ${node.dimensions.height}` : undefined;
+                                            htmlGallery.push({
+                                                id: `ig-sidecar-${idx + 1}`,
+                                                position: idx + 1,
+                                                type: itemIsVid ? 'video' : 'image',
+                                                url: unescapeMetaUrl(itemUrl),
+                                                downloadUrl: `/api/download?url=${encodeURIComponent(unescapeMetaUrl(itemUrl))}&filename=${encodeURIComponent(dlFilename)}`,
+                                                thumbnailUrl: unescapeMetaUrl(node.display_url || itemUrl),
+                                                resolution: res,
+                                                format: ext,
+                                                hasAudio: itemIsVid,
+                                            });
+                                        }
+                                    }
+                                } catch {
+                                    // Ignore parse errors
+                                }
+                            }
+
+                            if (htmlGallery.length > 1) {
+                                const cleanTitle = sanitizeFilename(`Instagram_${shortcode}`, 'Instagram_Carousel');
+                                const formats: MediaFormatOption[] = htmlGallery.map((item) => {
+                                    const slideNum = String(item.position).padStart(2, '0');
+                                    return {
+                                        id: `ig-slide-${item.position}`,
+                                        label: `Slide ${slideNum} (${item.format.toUpperCase()} ${item.type === 'video' ? 'Video' : 'Photo'})`,
+                                        format: item.format,
+                                        quality: item.resolution || 'Original Resolution',
+                                        downloadUrl: item.downloadUrl,
+                                        category: item.type,
+                                        hasAudio: item.hasAudio,
+                                    };
+                                });
+
+                                return {
+                                    id: `instagram-${shortcode}`,
+                                    originalUrl: url,
+                                    canonicalUrl,
+                                    platform: 'instagram',
+                                    platformName: 'Instagram Carousel',
+                                    title: `Instagram Carousel (${shortcode})`,
+                                    mediaType: 'gallery',
+                                    thumbnailUrl: htmlGallery[0].thumbnailUrl || htmlGallery[0].url,
+                                    formats,
+                                    gallery: htmlGallery,
+                                    complianceNotice: 'Downloads of public Instagram media are subject to creator rights and platform policies.',
+                                    officialViewUrl: canonicalUrl,
+                                    fetchedAt: new Date().toISOString(),
+                                };
+                            }
 
                             // Extract video_versions if available
                             let videoUrl = '';

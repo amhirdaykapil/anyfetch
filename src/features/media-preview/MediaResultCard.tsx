@@ -20,6 +20,7 @@ import { MediaResult, MediaFormatOption, GalleryItem } from '@/types/media';
 import { getPlatformIcon } from '@/components/PlatformIcons';
 import { PLATFORMS_META } from '@/features/platform-detection/detector';
 import { GalleryCarousel } from './GalleryCarousel';
+import { CarouselSection } from './CarouselSection';
 import { DownloadProgressButton } from '@/features/downloader/DownloadProgressButton';
 
 interface MediaResultCardProps {
@@ -416,6 +417,15 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                         }
                     </div>
                 </div>
+
+                {/* Dedicated Universal Carousel Section */}
+                {result.gallery && result.gallery.length > 0 && (
+                    <CarouselSection
+                        items={result.gallery}
+                        title={result.title}
+                        onDownloadStarted={onDownloadStarted}
+                    />
+                )}
             </div>
         </div>
     );
