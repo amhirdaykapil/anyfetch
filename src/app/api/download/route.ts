@@ -145,6 +145,8 @@ export async function GET(req: NextRequest) {
             ? [
                 '-m',
                 'yt_dlp',
+                '--extractor-args',
+                'youtube:player_client=android,web',
                 '-f',
                 'ba/b',
                 '-x',
@@ -161,6 +163,8 @@ export async function GET(req: NextRequest) {
             : [
                 '-m',
                 'yt_dlp',
+                '--extractor-args',
+                'youtube:player_client=android,web',
                 '-f',
                 `bestvideo[height<=${parseInt(quality, 10) || 720}]+bestaudio/best[height<=${parseInt(quality, 10) || 720}]/best`,
                 '--downloader-args',

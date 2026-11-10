@@ -187,6 +187,9 @@ export function DownloadProgressButton({
             if (headerTotal && !isNaN(headerTotal) && headerTotal > 0) {
                 totalRef.current = headerTotal;
                 setTotalBytes(headerTotal);
+                if (progress === null) {
+                    setProgress(0);
+                }
             }
 
             const contentType = res.headers.get('content-type') || 'application/octet-stream';
@@ -211,7 +214,7 @@ export function DownloadProgressButton({
                     const curTotal = totalRef.current;
                     if (curTotal && curTotal > 0) {
                         // progress = (downloadedBytes / totalBytes) * 100
-                        const pct = Math.min(99, Math.max(0, Math.floor((currentReceived / curTotal) * 100)));
+                        const pct = Math.min(99, Math.max(1, Math.floor((currentReceived / curTotal) * 100)));
                         setProgress(pct);
                     }
                 });
@@ -239,8 +242,9 @@ export function DownloadProgressButton({
             const finalReceived = receivedRef.current;
             setReceivedBytes(finalReceived);
 
-            // Only mark 100% when stream has closed successfully
+            // Set 100% and briefly pause to let the user see the full bar fill before checkmark appears
             setProgress(100);
+            await new Promise((resolve) => setTimeout(resolve, 220));
             setDownloadState('completed');
 
             const blob = new Blob(chunks as BlobPart[], { type: contentType });
@@ -294,121 +298,128 @@ export function DownloadProgressButton({
     const isStreaming = downloadState === 'downloading' || downloadState === 'preparing';
 
     return (
-            <div className={`relative inline-flex flex-col items-end ${compact ? '' : 'min-w-[190px]'}`}>
-      <button
-        type="button"
-        onClick={startDownload}
-        disabled={isStreaming}
-        className={`group relative overflow-hidden rounded-lg font-medium transition-all duration-200 select-none ${
-          compact ? 'h-7 min-w-[130px] text-xs' : 'h-8.5 min-w-[180px] text-xs'
-        } ${
-          downloadState === 'completed'
-            ? 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500'
-            : downloadState === 'failed'
-            ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm'
-            : downloadState === 'cancelled'
-            ? 'bg-zinc-700 text-white dark:bg-zinc-700'
-            : isStreaming
-            ? 'bg-zinc-950 text-white border border-zinc-700/80 shadow-inner dark:bg-zinc-950 dark:border-zinc-700'
-            : 'bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 active:scale-95 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white'
-        } ${className}`}
-        title={errorMessage || undefined}
-      >
-                {/* Animated Progress Fill Bar - fill width corresponds EXACTLY to actual progress percentage */}
-                {isStreaming && (
-                    <div
-                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 transition-all duration-100 ease-linear"
-                        style={{
-                            width: progress !== null ? `${progress}%` : '100%',
-                            opacity: progress !== null ? 1 : 0.35,
-                        }}
-                    >
-                        {/* Luminous leading edge bead */}
-                        {progress !== null && (
-                            <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_8px_#ffffff]" />
+        <div className={`relative inline-flex flex-col items-end ${compact ? '' : 'min-w-[190px]'}`}>
+            <button
+                type="button"
+                onClick={startDownload}
+                disabled={isStreaming}
+                className={`group relative overflow-hidden rounded-lg font-medium transition-all duration-200 select-none ${compact ? 'h-7 min-w-[130px] text-xs' : 'h-8.5 min-w-[180px] text-xs'
+                        } ${downloadState === 'completed'
+                            ? 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500'
+                            : downloadState === 'failed'
+                                ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm'
+                                : downloadState === 'cancelled'
+                                    ? 'bg-zinc-700 text-white dark:bg-zinc-700'
+                                    : isStreaming
+                                        ? 'bg-zinc-950 text-white border border-zinc-700/80 shadow-inner dark:bg-zinc-950 dark:border-zinc-700'
+                                        : 'bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 active:scale-95 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white'
+                        } ${className}`}
+                    title={errorMessage || undefined}
+            >
+                    {/* Animated Progress Fill Bar */}
+                    {isStreaming && (
+                        <>
+                            {progress !== null ? (
+                                <div
+                                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 transition-all duration-150 ease-out"
+                                    style={{
+                                        width: `${Math.max(3, progress)}%`,
+                                    }}
+                                >
+                                    {/* Luminous leading edge bead */}
+                                    <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_8px_#ffffff]" />
+                                    {/* Subtle animated shine sweep while downloading */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-sweep" />
+                                </div>
+                            ) : (
+                                /* Active indeterminate scanning pulse for chunked stream */
+                                <div className="absolute inset-0 overflow-hidden">
+                                    <div className="h-full w-1/2 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent animate-indeterminate-slide" />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Content Layer */}
+                    <span className="relative z-10 flex h-full w-full items-center justify-center px-3 whitespace-nowrap">
+                        {downloadState === 'idle' && (
+                            <span className="flex items-center gap-1.5">
+                                <Download className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
+                                <span>Download</span>
+                            </span>
                         )}
-                        {/* Subtle animated shine while downloading */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-sweep" />
-                    </div>
+
+                {downloadState === 'preparing' && (
+                    <span className="flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                        <span>Connecting...</span>
+                    </span>
                 )}
 
-                {/* Content Layer */}
-                <span className="relative z-10 flex h-full w-full items-center justify-center px-3 whitespace-nowrap">
-                    {downloadState === 'idle' && (
-                        <span className="flex items-center gap-1.5">
-                            <Download className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
-                            <span>Download</span>
-                        </span>
-                    )}
+                {downloadState === 'downloading' && (
+                    <span className="flex w-full items-center justify-between gap-1.5">
+                        {progress !== null && totalBytes ? (
+                            <>
+                                <span className="font-mono text-xs font-bold text-white tabular-nums drop-shadow-sm">
+                                    {progress}%
+                                </span>
+                                <span className="text-zinc-400 text-[10px]">|</span>
+                                <span className="font-mono text-[11px] font-medium text-zinc-100 tabular-nums drop-shadow-sm">
+                                    {formatBytes(receivedBytes)} / {formatBytes(totalBytes)}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="flex items-center gap-1 font-mono text-[11px] font-semibold text-white tabular-nums drop-shadow-sm">
+                                    <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                                    {formatBytes(receivedBytes)}
+                                </span>
+                                <span className="text-zinc-400 text-[10px]">|</span>
+                                <span className="font-mono text-[11px] text-zinc-200">
+                                    Streaming...
+                                </span>
+                            </>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="ml-1 rounded-full p-0.5 text-zinc-300 transition-colors hover:bg-white/20 hover:text-white"
+                            title="Cancel download"
+                        >
+                            <X className="h-3 w-3" />
+                        </button>
+                    </span>
+                )}
 
-                    {downloadState === 'preparing' && (
-                        <span className="flex items-center gap-1.5">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-                            <span>Connecting...</span>
-                        </span>
-                    )}
+                {downloadState === 'completed' && (
+                    <span className="flex items-center gap-1.5">
+                        <Check className="h-3.5 w-3.5 animate-in zoom-in-75 duration-200" />
+                        <span>Downloaded</span>
+                    </span>
+                )}
 
-                    {downloadState === 'downloading' && (
-                        <span className="flex w-full items-center justify-between gap-1.5">
-                            {progress !== null && totalBytes ? (
-                                <>
-                                    <span className="font-mono text-xs font-bold text-white tabular-nums drop-shadow-sm">
-                                        {progress}%
-                                    </span>
-                                    <span className="text-zinc-400 text-[10px]">|</span>
-                                    <span className="font-mono text-[11px] font-medium text-zinc-100 tabular-nums drop-shadow-sm">
-                                        {formatBytes(receivedBytes)} / {formatBytes(totalBytes)}
-                                    </span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="font-mono text-[11px] font-semibold text-white tabular-nums drop-shadow-sm">
-                                        {formatBytes(receivedBytes)}
-                                    </span>
-                                    <span className="text-zinc-400 text-[10px]">|</span>
-                                    <span className="font-mono text-[11px] text-zinc-200">
-                                        Streaming...
-                                    </span>
-                                </>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                className="ml-1 rounded-full p-0.5 text-zinc-300 transition-colors hover:bg-white/20 hover:text-white"
-                                title="Cancel download"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </span>
-                    )}
+                {downloadState === 'failed' && (
+                    <span className="flex items-center gap-1.5">
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span>Retry</span>
+                    </span>
+                )}
 
-                    {downloadState === 'completed' && (
-                        <span className="flex items-center gap-1.5">
-                            <Check className="h-3.5 w-3.5 animate-in zoom-in-75 duration-200" />
-                            <span>Downloaded</span>
-                        </span>
-                    )}
+                {downloadState === 'cancelled' && (
+                    <span>Cancelled</span>
+                )}
+            </span>
+        </button>
 
-                    {downloadState === 'failed' && (
-                        <span className="flex items-center gap-1.5">
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span>Retry</span>
-                        </span>
-                    )}
-
-                    {downloadState === 'cancelled' && (
-                        <span>Cancelled</span>
-                    )}
-                </span>
-            </button>
-
-            {/* Real-time Subtitle indicator under button */}
-            {isStreaming && (
-                <span className="mt-1 font-mono text-[9px] text-zinc-500 dark:text-zinc-400">
-                    {formatBytes(receivedBytes)}
-                    {totalBytes ? ` of ${formatBytes(totalBytes)}` : ' received'}
-                </span>
-            )}
-        </div>
+        {/* Real-time Subtitle indicator under button */ }
+    {
+        isStreaming && (
+            <span className="mt-1 font-mono text-[9px] text-zinc-500 dark:text-zinc-400">
+                {formatBytes(receivedBytes)}
+                {totalBytes ? ` of ${formatBytes(totalBytes)}` : ' streamed'}
+            </span>
+        )
+    }
+        </div >
     );
 }

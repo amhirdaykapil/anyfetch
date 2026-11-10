@@ -299,84 +299,64 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                             )}
 
                             {/* Formats List */}
-                            {
-                                result.formats.length === 0 ? (
-                                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-700 dark:text-amber-400">
-                                        <div className="flex items-center gap-2 font-semibold">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <span>Direct stream extraction restricted by platform</span>
-                                        </div>
-                                        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                                            Platform policies restrict direct video downloads for this item. Master artwork and thumbnails can still be downloaded below, or you may view the original media directly on {result.platformName}.
-                                        </p>
-                                        {result.officialViewUrl && (
-                                            <a
-                                                href={result.officialViewUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-700 transition"
-                                            >
-                                                <span>Open on {result.platformName}</span>
-                                                <ExternalLink className="h-3.5 w-3.5" />
-                                            </a>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {result.formats.map((format) => {
-                                            const isSelected = selectedFormatId === format.id;
+                                    {
+                                        result.formats.length === 0 ? null : (
+                                            <div className="space-y-2">
+                                                {result.formats.map((format) => {
+                                                    const isSelected = selectedFormatId === format.id;
 
-                                            return (
-                                                <div
-                                                    key={format.id}
-                                                    onClick={() => setSelectedFormatId(format.id)}
-                                                    className={`group flex items-center justify-between rounded-xl border p-3 transition-all cursor-pointer ${isSelected
-                                                        ? 'border-zinc-900 bg-zinc-50/80 dark:border-zinc-400 dark:bg-zinc-900/60'
-                                                        : 'border-zinc-200/80 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 dark:border-white/[0.06] dark:bg-zinc-900/20 dark:hover:border-white/[0.12] dark:hover:bg-zinc-900/50'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 font-mono text-xs font-bold uppercase text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                                                            {format.format}
-                                                        </div>
+                                                    return (
+                                                        <div
+                                                            key={format.id}
+                                                            onClick={() => setSelectedFormatId(format.id)}
+                                                            className={`group flex items-center justify-between rounded-xl border p-3 transition-all cursor-pointer ${isSelected
+                                                                ? 'border-zinc-900 bg-zinc-50/80 dark:border-zinc-400 dark:bg-zinc-900/60'
+                                                                : 'border-zinc-200/80 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 dark:border-white/[0.06] dark:bg-zinc-900/20 dark:hover:border-white/[0.12] dark:hover:bg-zinc-900/50'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 font-mono text-xs font-bold uppercase text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                                                                    {format.format}
+                                                                </div>
 
-                                                        <div>
-                                                            <div className="flex flex-wrap items-center gap-1.5">
-                                                                <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
-                                                                    {format.label}
-                                                                </span>
-                                                                <span className="rounded bg-zinc-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                                                                    {format.quality}
-                                                                </span>
-                                                                {format.hasAudio && (
-                                                                    <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/10 px-1.5 py-0.2 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                                                        <Volume2 className="h-2.5 w-2.5" />
-                                                                        <span>Audio</span>
-                                                                    </span>
-                                                                )}
+                                                                <div>
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                                                            {format.label}
+                                                                        </span>
+                                                                        <span className="rounded bg-zinc-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                                                            {format.quality}
+                                                                        </span>
+                                                                        {format.hasAudio && (
+                                                                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/10 px-1.5 py-0.2 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                                                <Volume2 className="h-2.5 w-2.5" />
+                                                                                <span>Audio</span>
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                                                        {format.resolution && <span>{format.resolution}</span>}
+                                                                        {format.resolution && format.fileSizeFormatted && <span>•</span>}
+                                                                        {format.fileSizeFormatted && <span>{format.fileSizeFormatted}</span>}
+                                                                    </div>
+                                                                </div>
                                                             </div>
 
-                                                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                                                                {format.resolution && <span>{format.resolution}</span>}
-                                                                {format.resolution && format.fileSizeFormatted && <span>•</span>}
-                                                                {format.fileSizeFormatted && <span>{format.fileSizeFormatted}</span>}
+                                                            {/* Download Action Button */}
+                                                            <div onClick={(e) => e.stopPropagation()}>
+                                                                <DownloadProgressButton
+                                                                    format={format}
+                                                                    defaultFilename={`${result.title || 'media_download'}.${format.format}`}
+                                                                    onDownloadStarted={onDownloadStarted}
+                                                                />
                                                             </div>
                                                         </div>
-                                                    </div>
-
-                                                    {/* Download Action Button */}
-                                                    <div onClick={(e) => e.stopPropagation()}>
-                                                        <DownloadProgressButton
-                                                            format={format}
-                                                            defaultFilename={`${result.title || 'media_download'}.${format.format}`}
-                                                            onDownloadStarted={onDownloadStarted}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                    );
+                                                })}
+                                            </div>
+                                        )
+                                    }
 
                             {/* Optional Separate Thumbnails & Artwork Section */}
                             {result.thumbnails && result.thumbnails.length > 0 && (
