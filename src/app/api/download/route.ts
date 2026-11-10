@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
         const videoId = searchParams.get('videoId');
         const quality = searchParams.get('quality') || '720';
         const customFilename = searchParams.get('filename') || `youtube_${videoId}.mp4`;
+        const expectedSize = searchParams.get('size') || searchParams.get('filesize');
 
         if (!videoId || !/^[a-zA-Z0-9_-]{6,15}$/.test(videoId)) {
             return NextResponse.json(
@@ -149,10 +150,14 @@ export async function GET(req: NextRequest) {
             const headers = new Headers();
             headers.set(
                 'Content-Disposition',
-                    buildContentDisposition(customFilename, isAudio ? 'audio.mp3' : 'video.mp4')
+                buildContentDisposition(customFilename, isAudio ? 'audio.mp3' : 'video.mp4')
             );
             headers.set('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+            if (expectedSize && parseInt(expectedSize, 10) > 0) {
+                headers.set('X-Total-Bytes', expectedSize);
+                headers.set('X-Content-Length', expectedSize);
+            }
 
             return new NextResponse(webStream as ReadableStream, {
                 status: 200,
@@ -318,33 +323,37 @@ export async function GET(req: NextRequest) {
         // Only set Content-Length if not compressed by upstream/undici
         const contentLength = response.headers.get('content-length');
         const contentEncoding = response.headers.get('content-encoding');
-        if (contentLength && !contentEncoding) {
-            headers.set('Content-Length', contentLength);
-        }
+            if (contentLength) {
+                headers.set('X-Content-Length', contentLength);
+                headers.set('X-Total-Bytes', contentLength);
+                if (!contentEncoding) {
+                    headers.set('Content-Length', contentLength);
+                }
+            }
 
-        const contentRange = response.headers.get('content-range');
-        if (contentRange && response.status === 206) {
-            headers.set('Content-Range', contentRange);
+            const contentRange = response.headers.get('content-range');
+            if (contentRange && response.status === 206) {
+                headers.set('Content-Range', contentRange);
+                return new NextResponse(response.body as ReadableStream, {
+                    status: 206,
+                    headers,
+                });
+            }
+
             return new NextResponse(response.body as ReadableStream, {
-                status: 206,
+                status: 200,
                 headers,
             });
-        }
-
-        return new NextResponse(response.body as ReadableStream, {
-            status: 200,
-            headers,
-        });
-    } catch (err) {
-        return NextResponse.json(
-            {
-                success: false,
-                error: {
-                    code: 'STREAM_FAILED',
-                    message: `Download stream failed: ${(err as Error).message}`,
+        } catch (err) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'STREAM_FAILED',
+                        message: `Download stream failed: ${(err as Error).message}`,
+                    },
                 },
-            },
-            { status: 502 }
-        );
+                { status: 502 }
+            );
+        }
     }
-}
