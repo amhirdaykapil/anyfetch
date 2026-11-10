@@ -12,6 +12,9 @@ export function ErrorBanner({ error, onRetry }: ErrorBannerProps) {
     switch (error.code) {
       case 'PRIVATE_CONTENT':
         return <Lock className="h-5 w-5 text-amber-500" />;
+      case 'AUTHENTICATION_REQUIRED':
+      case 'INVALID_CREDENTIALS':
+        return <Lock className="h-5 w-5 text-indigo-500" />;
       case 'RESTRICTED_CONTENT':
       case 'DELETED_POST':
         return <Ban className="h-5 w-5 text-red-500" />;
@@ -29,7 +32,11 @@ export function ErrorBanner({ error, onRetry }: ErrorBannerProps) {
   const getTitle = () => {
     switch (error.code) {
       case 'PRIVATE_CONTENT':
-        return 'Private or Restricted Media';
+        return 'Private Subreddit or Account';
+      case 'AUTHENTICATION_REQUIRED':
+        return 'Authentication Required';
+      case 'INVALID_CREDENTIALS':
+        return 'Invalid API Credentials';
       case 'RESTRICTED_CONTENT':
         return 'Age or Region Restricted';
       case 'DELETED_POST':

@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { GalleryItem } from '@/types/media';
-import { ChevronLeft, ChevronRight, Download, Eye, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { DownloadProgressButton } from '@/features/downloader/DownloadProgressButton';
 
 interface GalleryCarouselProps {
     items: GalleryItem[];
@@ -24,6 +25,12 @@ export function GalleryCarousel({ items, title, onDownloadItem }: GalleryCarouse
     const next = () => {
         setCurrentIndex((c) => (c === items.length - 1 ? 0 : c + 1));
     };
+
+    const downloadUrl = currentItem.url.startsWith('/api/download')
+        ? currentItem.url
+        : `/api/download?url=${encodeURIComponent(currentItem.url)}&filename=${encodeURIComponent(
+              `${title || 'gallery_item'}_${currentIndex + 1}.${currentItem.format}`
+          )}`;
 
     return (
         <div className="flex flex-col gap-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-white/[0.08] dark:bg-zinc-900/30">
@@ -66,45 +73,48 @@ export function GalleryCarousel({ items, title, onDownloadItem }: GalleryCarouse
                     className="h-full w-full object-contain"
                 />
 
-                <div className="absolute bottom-3 right-3 flex items-center gap-2">
-          <button
-                        type="button"
-                        onClick={() => onDownloadItem && onDownloadItem(currentItem)}
-                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                    >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>Download Item</span>
-                </button>
+                <div className="absolute bottom-3 right-3 flex items-center gap-2 shadow-lg">
+                    <DownloadProgressButton
+                        key={currentItem.id}
+                        format={{
+                            id: currentItem.id,
+                            label: `Item ${currentIndex + 1} (${currentItem.format.toUpperCase()})`,
+                            format: currentItem.format,
+                            quality: currentItem.resolution || 'Original',
+                            downloadUrl,
+                        }}
+                        compact
+                        defaultFilename={`${title || 'gallery_item'}_${currentIndex + 1}.${currentItem.format}`}
+                        onDownloadStarted={() => onDownloadItem && onDownloadItem(currentItem)}
+                    />
+                </div>
             </div>
-        </div>
 
-      {/* Thumbnails strip */ }
-    {
-        items.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-                {items.map((item, idx) => (
-                    <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setCurrentIndex(idx)}
-                        className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border transition-all ${idx === currentIndex
-                                ? 'border-zinc-900 ring-2 ring-zinc-900/20 dark:border-white dark:ring-white/20'
-                                : 'border-transparent opacity-60 hover:opacity-100'
+            {/* Thumbnails strip */}
+            {items.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                    {items.map((item, idx) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setCurrentIndex(idx)}
+                            className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border transition-all ${
+                                idx === currentIndex
+                                    ? 'border-zinc-900 ring-2 ring-zinc-900/20 dark:border-white dark:ring-white/20'
+                                    : 'border-transparent opacity-60 hover:opacity-100'
                             }`}
-                    >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={item.thumbnailUrl || item.url}
-                            alt=""
-                            referrerPolicy="no-referrer"
-                            className="h-full w-full object-cover"
-                        />
-                    </button>
-                ))}
-            </div>
-        )
-    }
-    </div >
-  );
+                        >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={item.thumbnailUrl || item.url}
+                                alt=""
+                                referrerPolicy="no-referrer"
+                                className="h-full w-full object-cover"
+                            />
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
-

@@ -20,6 +20,7 @@ import { MediaResult, MediaFormatOption, GalleryItem } from '@/types/media';
 import { getPlatformIcon } from '@/components/PlatformIcons';
 import { PLATFORMS_META } from '@/features/platform-detection/detector';
 import { GalleryCarousel } from './GalleryCarousel';
+import { DownloadProgressButton } from '@/features/downloader/DownloadProgressButton';
 
 interface MediaResultCardProps {
     result: MediaResult;
@@ -198,23 +199,23 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                             />
                         ) : (
                             <div className="group relative aspect-video w-full overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-950 dark:border-white/[0.08]">
-                                    {
-                                        result.thumbnailUrl && !imgError ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                                src={result.thumbnailUrl}
-                                                alt={result.title}
-                                                referrerPolicy="no-referrer"
-                                                onError={() => setImgError(true)}
-                                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                            />
-                                        ) : (
-                                            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-zinc-500">
-                                                {getPlatformIcon(result.platform, { size: 36 })}
-                                                <span className="text-xs">Preview unavailable</span>
-                                            </div>
-                                        )
-                                    }
+                                {
+                                    result.thumbnailUrl && !imgError ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={result.thumbnailUrl}
+                                            alt={result.title}
+                                            referrerPolicy="no-referrer"
+                                            onError={() => setImgError(true)}
+                                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-zinc-500">
+                                            {getPlatformIcon(result.platform, { size: 36 })}
+                                            <span className="text-xs">Preview unavailable</span>
+                                        </div>
+                                    )
+                                }
 
                                 {/* Duration Badge */}
                                 {result.durationFormatted && (
@@ -323,7 +324,6 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                                 ) : (
                                     <div className="space-y-2">
                                         {result.formats.map((format) => {
-                                            const isDownloading = downloadingId === format.id;
                                             const isSelected = selectedFormatId === format.id;
 
                                             return (
@@ -365,27 +365,13 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                                                     </div>
 
                                                     {/* Download Action Button */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDownload(format);
-                                                        }}
-                                                        disabled={isDownloading}
-                                                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-zinc-800 active:scale-95 disabled:opacity-75 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                                                    >
-                                                        {isDownloading ? (
-                                                            <>
-                                                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                                                <span>Saving...</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Download className="h-3.5 w-3.5" />
-                                                                <span>Download</span>
-                                                            </>
-                                                        )}
-                                                    </button>
+                                                    <div onClick={(e) => e.stopPropagation()}>
+                                                        <DownloadProgressButton
+                                                            format={format}
+                                                            defaultFilename={`${result.title || 'media_download'}.${format.format}`}
+                                                            onDownloadStarted={onDownloadStarted}
+                                                        />
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -405,7 +391,6 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                                     </div>
                                     <div className="space-y-1.5">
                                         {result.thumbnails.map((thumb) => {
-                                            const isDownloading = downloadingId === thumb.id;
                                             return (
                                                 <div
                                                     key={thumb.id}
@@ -424,24 +409,14 @@ export function MediaResultCard({ result, onDownloadStarted }: MediaResultCardPr
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDownload(thumb)}
-                                                        disabled={isDownloading}
-                                                        className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100 disabled:opacity-75 dark:border-white/[0.1] dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                                                    >
-                                                        {isDownloading ? (
-                                                            <>
-                                                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                                                <span>Saving...</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Download className="h-3 w-3" />
-                                                                <span>Download</span>
-                                                            </>
-                                                        )}
-                                                    </button>
+                                                    <div onClick={(e) => e.stopPropagation()}>
+                                                        <DownloadProgressButton
+                                                            format={thumb}
+                                                            compact
+                                                            defaultFilename={`${result.title || 'thumbnail'}_${thumb.resolution || thumb.quality}.${thumb.format}`}
+                                                            onDownloadStarted={onDownloadStarted}
+                                                        />
+                                                    </div>
                                                 </div>
                                             );
                                         })}

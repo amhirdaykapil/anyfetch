@@ -6,6 +6,8 @@ export class ExtractionError extends Error {
     | 'UNSUPPORTED_PLATFORM'
     | 'PRIVATE_CONTENT'
     | 'RESTRICTED_CONTENT'
+    | 'AUTHENTICATION_REQUIRED'
+    | 'INVALID_CREDENTIALS'
     | 'DELETED_POST'
     | 'API_UNAVAILABLE'
     | 'RATE_LIMITED'

@@ -35,6 +35,7 @@ export interface GalleryItem {
   thumbnailUrl?: string;
   width?: number;
   height?: number;
+  resolution?: string;
   format: string;
   fileSizeFormatted?: string;
 }
@@ -90,6 +91,8 @@ export interface AnalyzeErrorResponse {
       | 'UNSUPPORTED_PLATFORM'
       | 'PRIVATE_CONTENT'
       | 'RESTRICTED_CONTENT'
+      | 'AUTHENTICATION_REQUIRED'
+      | 'INVALID_CREDENTIALS'
       | 'DELETED_POST'
       | 'API_UNAVAILABLE'
       | 'RATE_LIMITED'
