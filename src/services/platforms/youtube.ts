@@ -83,7 +83,7 @@ export class YouTubeAdapter implements PlatformAdapter {
 
         const primaryThumbnail = hasMaxRes ? maxResThumbnail : hqThumbnail;
 
-        // Step 1: Execute yt-dlp metadata extraction with android,web player clients
+        // Step 1: Execute yt-dlp metadata extraction with multi-client adaptive discovery (tv_samsung, visionos, android)
         let ytDlpData: any = null;
         try {
             const { stdout } = await execFileAsync(
@@ -92,15 +92,15 @@ export class YouTubeAdapter implements PlatformAdapter {
                     '-m',
                     'yt_dlp',
                     '--extractor-args',
-                    'youtube:player_client=android,web',
+                    'youtube:player_client=tv_samsung,visionos,android',
                     '-J',
                     '--no-warnings',
                     '--no-playlist',
                     canonicalUrl,
                 ],
                 {
-                    timeout: 15000,
-                    maxBuffer: 15 * 1024 * 1024,
+                    timeout: 20000,
+                    maxBuffer: 25 * 1024 * 1024,
                 }
             );
             ytDlpData = JSON.parse(stdout);
@@ -113,15 +113,15 @@ export class YouTubeAdapter implements PlatformAdapter {
                         '-m',
                         'yt_dlp',
                         '--extractor-args',
-                        'youtube:player_client=android,web',
+                        'youtube:player_client=tv_samsung,visionos,android',
                         '-J',
                         '--no-warnings',
                         '--no-playlist',
                         canonicalUrl,
                     ],
                     {
-                        timeout: 12000,
-                        maxBuffer: 15 * 1024 * 1024,
+                        timeout: 18000,
+                        maxBuffer: 25 * 1024 * 1024,
                     }
                 );
                 ytDlpData = JSON.parse(stdout);
@@ -196,115 +196,164 @@ export class YouTubeAdapter implements PlatformAdapter {
             category: 'thumbnail',
         });
 
-        // Step 3: Build REAL video formats from yt-dlp streams
+        // Step 3: Build complete progressive & adaptive video formats from yt-dlp streams
         const formats: MediaFormatOption[] = [];
-        const seenHeights = new Set<number>();
 
         if (ytDlpData && Array.isArray(ytDlpData.formats)) {
-            // Sort formats descending by resolution
             const rawFormats = ytDlpData.formats as any[];
 
-            // Collect video streams
-            for (const f of rawFormats) {
-                const height = f.height;
-                if (!height || typeof height !== 'number' || height < 144) continue;
-                if (seenHeights.has(height)) continue;
+                // Detect if video contains audio tracks
+                const audioFormats = rawFormats.filter(
+                    (f) => f.acodec && f.acodec !== 'none' && f.vcodec === 'none'
+                );
+                const hasAudio = audioFormats.length > 0 || rawFormats.some((f) => f.acodec && f.acodec !== 'none');
 
-                // Priority resolutions to display
-                if ([2160, 1440, 1080, 720, 480, 360, 240].includes(height) || isShorts) {
-                    seenHeights.add(height);
+                    // Find best audio stream size for accurate merged file size calculation
+                    const bestAudio = audioFormats.sort((a, b) => (b.tbr || 0) - (a.tbr || 0))[0];
+                    const audioStreamSize =
+                        typeof bestAudio?.filesize === 'number' && bestAudio.filesize > 0
+                            ? bestAudio.filesize
+                            : typeof bestAudio?.filesize_approx === 'number' && bestAudio.filesize_approx > 0
+                                ? bestAudio.filesize_approx
+                                : duration
+                                    ? Math.round((duration * 128 * 1024) / 8)
+                                    : 5 * 1024 * 1024;
 
-                    const label =
-                        height >= 2160
-                            ? `4K Ultra HD Video (${height}p MP4)`
-                            : height >= 1440
-                                ? `2K Quad HD Video (${height}p MP4)`
-                                : height >= 1080
-                                    ? `Full HD Video (${height}p MP4)`
-                                    : height >= 720
-                                        ? `HD Video (${height}p MP4)`
-                                        : `Standard Video (${height}p MP4)`;
+                    // Collect all genuine video streams (progressive and adaptive DASH/HLS)
+                    const validVideoFormats = rawFormats.filter(
+                        (f) =>
+                            f.vcodec &&
+                            f.vcodec !== 'none' &&
+                            typeof f.height === 'number' &&
+                            f.height >= 144 &&
+                            f.protocol !== 'mhtml'
+                    );
 
-                    const exactOrApproxSize = (typeof f.filesize === 'number' && f.filesize > 0)
-                        ? f.filesize
-                        : (typeof f.filesize_approx === 'number' && f.filesize_approx > 0)
-                            ? f.filesize_approx
-                            : (duration && f.tbr ? Math.round((duration * f.tbr * 1024) / 8) : undefined);
+                    // Group video streams by discrete vertical height
+                    const formatsByHeight = new Map<number, any[]>();
+                    for (const f of validVideoFormats) {
+                        const list = formatsByHeight.get(f.height) || [];
+                        list.push(f);
+                        formatsByHeight.set(f.height, list);
+                    }
 
-                    const estimatedBitrateKbps =
-                        height >= 2160 ? 15000 :
-                            height >= 1440 ? 8000 :
-                                height >= 1080 ? 4000 :
-                                    height >= 720 ? 2000 :
-                                        height >= 480 ? 1000 : 500;
+                    // Sort unique heights strictly descending (e.g. 2160, 1440, 1080, 720, 480, 360, 240, 144)
+                    const sortedHeights = Array.from(formatsByHeight.keys()).sort((a, b) => b - a);
 
-                    const computedSize = exactOrApproxSize || (duration ? Math.round((duration * estimatedBitrateKbps * 1024) / 8) : 15 * 1024 * 1024);
+                    for (const height of sortedHeights) {
+                        const streams = formatsByHeight.get(height) || [];
+                        // Select best quality stream for this resolution (prioritize native https over m3u8, then highest bitrate)
+                        const bestStream = streams.sort((a, b) => {
+                            const aProto = a.protocol?.startsWith('http') ? 1 : 0;
+                            const bProto = b.protocol?.startsWith('http') ? 1 : 0;
+                            if (aProto !== bProto) return bProto - aProto;
+                            return (b.tbr || 0) - (a.tbr || 0);
+                        })[0];
 
+                        if (!bestStream) continue;
+
+                        const width = bestStream.width;
+                        const resolutionStr = width && height ? `${width}x${height}` : `${height}p`;
+
+                        const label =
+                            height >= 2160 ? `4K Ultra HD Video (${height}p MP4)`
+                                : height >= 1440 ? `2K Quad HD Video (${height}p MP4)`
+                                    : height >= 1080 ? `Full HD Video (${height}p MP4)`
+                                        : height >= 720 ? `HD Video (${height}p MP4)`
+                                            : height >= 480 ? `Standard Video (${height}p MP4)`
+                                                : height >= 360 ? `Standard Video (${height}p MP4)`
+                                                    : height >= 240 ? `Low Definition Video (${height}p MP4)`
+                                                        : `Basic Video (${height}p MP4)`;
+
+                        const qualityStr =
+                            !hasAudio ? `${height}p Video (No Audio)`
+                                : height >= 2160 ? `${height}p 4K with Audio`
+                                    : height >= 1440 ? `${height}p 2K with Audio`
+                                        : height >= 1080 ? `${height}p Full HD with Audio`
+                                            : height >= 720 ? `${height}p HD with Audio`
+                                                : `${height}p SD with Audio`;
+
+                        // Calculate accurate file size
+                        let videoSize: number | undefined;
+                        if (typeof bestStream.filesize === 'number' && bestStream.filesize > 0) {
+                            videoSize = bestStream.filesize;
+                        } else if (typeof bestStream.filesize_approx === 'number' && bestStream.filesize_approx > 0) {
+                            videoSize = bestStream.filesize_approx;
+                        } else if (duration && bestStream.tbr) {
+                            videoSize = Math.round((duration * bestStream.tbr * 1024) / 8);
+                        }
+
+                        // If stream already has audio (progressive), size is complete; otherwise add audio stream size
+                        const isStreamCombined = bestStream.acodec && bestStream.acodec !== 'none';
+                        const totalEstimatedSize = videoSize
+                            ? isStreamCombined
+                                ? videoSize
+                                : videoSize + (hasAudio ? audioStreamSize : 0)
+                            : duration
+                                ? Math.round(
+                                    (duration *
+                                        (height >= 1080 ? 4500 : height >= 720 ? 2500 : height >= 480 ? 1200 : height >= 360 ? 600 : 300) *
+                                        1024) /
+                                    8
+                                )
+                                : undefined;
+
+                        formats.push({
+                            id: `yt-video-${height}`,
+                            label,
+                            format: 'mp4',
+                            quality: qualityStr,
+                            resolution: resolutionStr,
+                            fileSize: totalEstimatedSize,
+                            fileSizeFormatted: totalEstimatedSize ? `${(totalEstimatedSize / 1024 / 1024).toFixed(1)} MB` : undefined,
+                            downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=${height}&size=${totalEstimatedSize || ''}&filename=${encodeURIComponent(`${cleanTitle}_${height}p.mp4`)}`,
+                            hasAudio,
+                            category: 'video',
+                        });
+                    }
+
+                    // Add standalone master MP3 audio extraction option
                     formats.push({
-                        id: `yt-video-${height}`,
-                        label,
-                        format: 'mp4',
-                        quality: `${height}p ${height >= 720 ? 'HD' : 'SD'} with Audio`,
-                        resolution: f.width && f.height ? `${f.width}x${f.height}` : `${height}p`,
-                        fileSize: computedSize,
-                        fileSizeFormatted: computedSize ? `${(computedSize / 1024 / 1024).toFixed(1)} MB` : undefined,
-                        downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=${height}&size=${computedSize}&filename=${encodeURIComponent(`${cleanTitle}_${height}p.mp4`)}`,
+                        id: 'yt-audio-mp3',
+                        label: 'Extracted Master Audio (MP3)',
+                        format: 'mp3',
+                        quality: 'High Bitrate Audio',
+                        fileSize: audioStreamSize,
+                        fileSizeFormatted: `${(audioStreamSize / 1024 / 1024).toFixed(1)} MB`,
+                        downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=audio&size=${audioStreamSize}&filename=${encodeURIComponent(`${cleanTitle}_audio.mp3`)}`,
                         hasAudio: true,
-                        category: 'video',
+                        category: 'audio',
                     });
                 }
+
+                const isPartiallyRestricted = false;
+
+                return {
+                    id: `youtube-${videoId}`,
+                    originalUrl: url,
+                    canonicalUrl,
+                    platform: 'youtube',
+                    platformName: isShorts ? 'YouTube Shorts' : 'YouTube',
+                    title: safeTitle,
+                    author: authorName
+                        ? {
+                            name: authorName,
+                            profileUrl: authorUrl,
+                        }
+                        : undefined,
+                    mediaType: 'video',
+                    thumbnailUrl: primaryThumbnail,
+                    duration,
+                    durationFormatted: duration
+                        ? `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
+                        : undefined,
+                    viewCount,
+                    formats,
+                    thumbnails,
+                    isPartiallyRestricted: false,
+                    complianceNotice: 'In compliance with YouTube Terms of Service, stream extraction is provided with audio-video merging where authorized.',
+                    officialViewUrl: canonicalUrl,
+                    fetchedAt: new Date().toISOString(),
+                };
             }
-
-            // Sort video formats descending by height
-            formats.sort((a, b) => {
-                const hA = parseInt(a.quality, 10) || 0;
-                const hB = parseInt(b.quality, 10) || 0;
-                return hB - hA;
-            });
-
-            // Add Audio extraction option with accurate size
-            const audioSize = Math.round(duration ? (duration * 128 * 1024) / 8 : 4 * 1024 * 1024);
-            formats.push({
-                id: 'yt-audio-mp3',
-                label: 'Extracted Master Audio (MP3)',
-                format: 'mp3',
-                quality: 'High Bitrate Audio',
-                fileSize: audioSize,
-                fileSizeFormatted: `${(audioSize / 1024 / 1024).toFixed(1)} MB`,
-                downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=audio&size=${audioSize}&filename=${encodeURIComponent(`${cleanTitle}_audio.mp3`)}`,
-                hasAudio: true,
-                category: 'audio',
-            });
         }
-
-        const isPartiallyRestricted = false;
-
-        return {
-            id: `youtube-${videoId}`,
-            originalUrl: url,
-            canonicalUrl,
-            platform: 'youtube',
-            platformName: isShorts ? 'YouTube Shorts' : 'YouTube',
-            title: safeTitle,
-            author: authorName
-                ? {
-                    name: authorName,
-                    profileUrl: authorUrl,
-                }
-                : undefined,
-            mediaType: 'video',
-            thumbnailUrl: primaryThumbnail,
-            duration,
-            durationFormatted: duration
-                ? `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
-                : undefined,
-            viewCount,
-            formats,
-            thumbnails,
-            isPartiallyRestricted: false,
-            complianceNotice: 'In compliance with YouTube Terms of Service, stream extraction is provided with audio-video merging where authorized.',
-            officialViewUrl: canonicalUrl,
-            fetchedAt: new Date().toISOString(),
-        };
-    }
-}

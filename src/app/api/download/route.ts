@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
             async pull(controller) {
                 try {
                     if (bytesSent >= totalSize) {
-                        try { controller.close(); } catch {}
+                        try { controller.close(); } catch { }
                         return;
                     }
                     const remaining = totalSize - bytesSent;
@@ -146,13 +146,14 @@ export async function GET(req: NextRequest) {
         const isAudio = quality === 'audio';
         const safeFilename = sanitizeFilename(customFilename, isAudio ? 'audio.mp3' : 'video.mp4');
         const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const targetHeight = parseInt(quality, 10) || 720;
 
         const args = isAudio
             ? [
                 '-m',
                 'yt_dlp',
                 '--extractor-args',
-                'youtube:player_client=android,web',
+                'youtube:player_client=tv_samsung,visionos,android',
                 '-f',
                 'ba/b',
                 '-x',
@@ -170,9 +171,9 @@ export async function GET(req: NextRequest) {
                 '-m',
                 'yt_dlp',
                 '--extractor-args',
-                'youtube:player_client=android,web',
+                'youtube:player_client=tv_samsung,visionos,android',
                 '-f',
-                `bestvideo[height<=${parseInt(quality, 10) || 720}]+bestaudio/best[height<=${parseInt(quality, 10) || 720}]/best`,
+                `bestvideo[height=${targetHeight}]+bestaudio/best[height=${targetHeight}]/bestvideo[height<=${targetHeight}]+bestaudio/best[height<=${targetHeight}]/best`,
                 '--downloader-args',
                 'ffmpeg_o:-movflags +frag_keyframe+empty_moov -f mp4',
                 '--ffmpeg-location',
@@ -367,37 +368,37 @@ export async function GET(req: NextRequest) {
         // Only set Content-Length if not compressed by upstream/undici
         const contentLength = response.headers.get('content-length') || searchParams.get('size');
         const contentEncoding = response.headers.get('content-encoding');
-            if (contentLength && parseInt(contentLength, 10) > 0) {
-                headers.set('X-Content-Length', contentLength);
-                headers.set('X-Total-Bytes', contentLength);
-                if (!contentEncoding) {
-                    headers.set('Content-Length', contentLength);
-                }
+        if (contentLength && parseInt(contentLength, 10) > 0) {
+            headers.set('X-Content-Length', contentLength);
+            headers.set('X-Total-Bytes', contentLength);
+            if (!contentEncoding) {
+                headers.set('Content-Length', contentLength);
             }
+        }
 
-            const contentRange = response.headers.get('content-range');
-            if (contentRange && response.status === 206) {
-                headers.set('Content-Range', contentRange);
-                return new NextResponse(response.body as ReadableStream, {
-                    status: 206,
-                    headers,
-                });
-            }
-
+        const contentRange = response.headers.get('content-range');
+        if (contentRange && response.status === 206) {
+            headers.set('Content-Range', contentRange);
             return new NextResponse(response.body as ReadableStream, {
-                status: 200,
+                status: 206,
                 headers,
             });
-        } catch (err) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: {
-                        code: 'STREAM_FAILED',
-                        message: `Download stream failed: ${(err as Error).message}`,
-                    },
-                },
-                { status: 502 }
-            );
         }
+
+        return new NextResponse(response.body as ReadableStream, {
+            status: 200,
+            headers,
+        });
+    } catch (err) {
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: 'STREAM_FAILED',
+                    message: `Download stream failed: ${(err as Error).message}`,
+                },
+            },
+            { status: 502 }
+        );
     }
+}
