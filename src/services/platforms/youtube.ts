@@ -207,14 +207,21 @@ export class YouTubeAdapter implements PlatformAdapter {
                                         ? `HD Video (${height}p MP4)`
                                         : `Standard Video (${height}p MP4)`;
 
+                    const exactSize = (typeof f.filesize === 'number' && f.filesize > 0)
+                        ? f.filesize
+                        : (typeof f.filesize_approx === 'number' && f.filesize_approx > 0)
+                            ? f.filesize_approx
+                            : undefined;
+
                     formats.push({
                         id: `yt-video-${height}`,
                         label,
                         format: 'mp4',
                         quality: `${height}p ${height >= 720 ? 'HD' : 'SD'} with Audio`,
                         resolution: f.width && f.height ? `${f.width}x${f.height}` : `${height}p`,
-                        fileSizeFormatted: f.filesize ? `${(f.filesize / 1024 / 1024).toFixed(1)} MB` : undefined,
-                        downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=${height}&filename=${encodeURIComponent(`${cleanTitle}_${height}p.mp4`)}`,
+                        fileSize: exactSize,
+                        fileSizeFormatted: exactSize ? `${(exactSize / 1024 / 1024).toFixed(1)} MB` : undefined,
+                        downloadUrl: `/api/download?type=yt_stream&videoId=${videoId}&quality=${height}&size=${exactSize || ''}&filename=${encodeURIComponent(`${cleanTitle}_${height}p.mp4`)}`,
                         hasAudio: true,
                         category: 'video',
                     });

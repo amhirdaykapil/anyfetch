@@ -89,6 +89,40 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const downloadType = searchParams.get('type');
 
+    // Support deterministic testing of live byte tracking and continuous progress
+    if (downloadType === 'benchmark_test') {
+        const totalSize = parseInt(searchParams.get('size') || '54525952', 10); // default 52 MB
+        const chunkSize = 256 * 1024; // 256 KB per chunk
+        let bytesSent = 0;
+
+        const stream = new ReadableStream({
+            async pull(controller) {
+                if (bytesSent >= totalSize) {
+                    controller.close();
+                    return;
+                }
+                const remaining = totalSize - bytesSent;
+                const thisChunk = Math.min(chunkSize, remaining);
+                const chunkData = new Uint8Array(thisChunk);
+                chunkData.fill(65);
+                controller.enqueue(chunkData);
+                bytesSent += thisChunk;
+                // Realistic chunk pacing
+                await new Promise((r) => setTimeout(r, 12));
+            },
+        });
+
+        const headers = new Headers();
+        headers.set('Content-Disposition', buildContentDisposition('test_52mb_file.bin', 'test_file.bin'));
+        headers.set('Content-Type', 'application/octet-stream');
+        headers.set('Content-Length', totalSize.toString());
+        headers.set('X-Content-Length', totalSize.toString());
+        headers.set('X-Total-Bytes', totalSize.toString());
+        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+        return new NextResponse(stream, { status: 200, headers });
+    }
+
     // Handle YouTube authorized streaming with on-the-fly audio/video multiplexing
     if (downloadType === 'yt_stream') {
         const videoId = searchParams.get('videoId');
@@ -321,9 +355,9 @@ export async function GET(req: NextRequest) {
         headers.set('Accept-Ranges', 'bytes');
 
         // Only set Content-Length if not compressed by upstream/undici
-        const contentLength = response.headers.get('content-length');
+        const contentLength = response.headers.get('content-length') || searchParams.get('size');
         const contentEncoding = response.headers.get('content-encoding');
-            if (contentLength) {
+            if (contentLength && parseInt(contentLength, 10) > 0) {
                 headers.set('X-Content-Length', contentLength);
                 headers.set('X-Total-Bytes', contentLength);
                 if (!contentEncoding) {

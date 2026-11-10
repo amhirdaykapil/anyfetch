@@ -115,26 +115,32 @@ export class FacebookAdapter implements PlatformAdapter {
             const progressiveSd = rawFormats.find((f: any) => f.format_id === 'sd' && f.url);
 
             if (progressiveHd) {
+                const hdSize = progressiveHd.filesize || progressiveHd.filesize_approx;
                 formats.push({
                     id: 'fb-video-hd',
                     label: 'High Definition Video (720p MP4)',
                     format: 'mp4',
                     quality: '720p HD with Audio',
                     resolution: '1280x720',
-                    downloadUrl: `/api/download?url=${encodeURIComponent(progressiveHd.url)}&filename=${encodeURIComponent(`${cleanTitle}_720p.mp4`)}`,
+                    fileSize: hdSize,
+                    fileSizeFormatted: hdSize ? `${(hdSize / 1024 / 1024).toFixed(1)} MB` : undefined,
+                    downloadUrl: `/api/download?url=${encodeURIComponent(progressiveHd.url)}&size=${hdSize || ''}&filename=${encodeURIComponent(`${cleanTitle}_720p.mp4`)}`,
                     hasAudio: true,
                     category: 'video',
                 });
             }
 
             if (progressiveSd) {
+                const sdSize = progressiveSd.filesize || progressiveSd.filesize_approx;
                 formats.push({
                     id: 'fb-video-sd',
                     label: 'Standard Definition Video (360p MP4)',
                     format: 'mp4',
                     quality: '360p SD with Audio',
                     resolution: '640x360',
-                    downloadUrl: `/api/download?url=${encodeURIComponent(progressiveSd.url)}&filename=${encodeURIComponent(`${cleanTitle}_360p.mp4`)}`,
+                    fileSize: sdSize,
+                    fileSizeFormatted: sdSize ? `${(sdSize / 1024 / 1024).toFixed(1)} MB` : undefined,
+                    downloadUrl: `/api/download?url=${encodeURIComponent(progressiveSd.url)}&size=${sdSize || ''}&filename=${encodeURIComponent(`${cleanTitle}_360p.mp4`)}`,
                     hasAudio: true,
                     category: 'video',
                 });
@@ -211,7 +217,7 @@ export class FacebookAdapter implements PlatformAdapter {
             const htmlRes = await fetch(targetUrl, {
                 headers: {
                     'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml',
                 },
                 signal: AbortSignal.timeout(7000),
