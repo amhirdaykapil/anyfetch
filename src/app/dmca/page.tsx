@@ -37,7 +37,7 @@ export default function DMCAPage() {
 
                     <div className="mt-8 space-y-6 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-sm">
                         <p>
-                            OmniFetch respects the intellectual property rights of creators and copyright holders worldwide. In accordance with the Digital Millennium Copyright Act of 1998 (17 U.S.C. § 512) and international copyright legislation, OmniFetch maintains a responsive, automated system to block or restrict access to any URL found to infringe copyright.
+                            AnyFetch respects the intellectual property rights of creators and copyright holders worldwide. In accordance with the Digital Millennium Copyright Act of 1998 (17 U.S.C. § 512) and international copyright legislation, AnyFetch maintains a responsive, automated system to block or restrict access to any URL found to infringe copyright.
                         </p>
 
                         <div className="rounded-2xl border border-zinc-200/80 bg-white p-6 dark:border-white/[0.08] dark:bg-zinc-950/60">
@@ -130,7 +130,7 @@ export default function DMCAPage() {
                         </div>
 
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
-                            Direct inquiries can also be transmitted to: <code className="font-mono text-zinc-700 dark:text-zinc-300">copyright@omnifetch.net</code>
+                            Direct inquiries can also be transmitted to: <code className="font-mono text-zinc-700 dark:text-zinc-300">copyright@anyfetch.net</code>
                         </p>
                     </div>
                 </div>

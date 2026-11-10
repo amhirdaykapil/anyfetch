@@ -141,7 +141,7 @@ export class TwitterAdapter implements PlatformAdapter {
                 const origUrl = rawUrl.includes('?') ? `${rawUrl}&name=orig` : `${rawUrl}?name=orig`;
 
                 const slideNum = String(i + 1).padStart(2, '0');
-                const dlUrl = `/api/download?url=${encodeURIComponent(origUrl)}&filename=${encodeURIComponent(`OmniFetch_Slide_${slideNum}.jpg`)}`;
+                const dlUrl = `/api/download?url=${encodeURIComponent(origUrl)}&filename=${encodeURIComponent(`AnyFetch_Slide_${slideNum}.jpg`)}`;
                 const resolution = photo.width && photo.height ? `${photo.width} × ${photo.height}` : undefined;
 
                 gallery.push({

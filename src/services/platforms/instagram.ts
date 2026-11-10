@@ -180,7 +180,7 @@ export class InstagramAdapter implements PlatformAdapter {
                             const isItemVid = Boolean(cItem.is_video || cItem.type === 'video' || itemUrl.includes('.mp4'));
                             const ext = isItemVid ? 'mp4' : 'jpg';
                             const slideNum = String(idx + 1).padStart(2, '0');
-                            const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                            const dlFilename = `AnyFetch_Slide_${slideNum}.${ext}`;
                             const thumb = cItem.thumbnail || cItem.display_url || cItem.thumbnailUrl || itemUrl;
 
                             gallery.push({
@@ -408,7 +408,7 @@ export class InstagramAdapter implements PlatformAdapter {
                                         );
                                         const ext = isVid ? 'mp4' : 'jpg';
                                         const slideNum = String(idx + 1).padStart(2, '0');
-                                        const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                                        const dlFilename = `AnyFetch_Slide_${slideNum}.${ext}`;
 
                                         let mediaUrl = '';
                                         let thumbUrl = '';
@@ -557,7 +557,7 @@ export class InstagramAdapter implements PlatformAdapter {
                                                     if (!itemUrl) continue;
                                                     const ext = itemIsVid ? 'mp4' : 'jpg';
                                                     const slideNum = String(idx + 1).padStart(2, '0');
-                                                    const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                                                    const dlFilename = `AnyFetch_Slide_${slideNum}.${ext}`;
                                                     const res = node.dimensions?.width && node.dimensions?.height ? `${node.dimensions.width} × ${node.dimensions.height}` : undefined;
                                                     htmlGallery.push({
                                                         id: `ig-sidecar-${idx + 1}`,

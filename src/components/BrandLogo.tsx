@@ -69,7 +69,7 @@ export function BrandLogo({ className = '', size = 'md' }: BrandLogoProps) {
       <div className="flex flex-col">
         <div className="flex items-center gap-1.5">
           <span className={`font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 ${textSize}`}>
-            OmniFetch
+            AnyFetch
           </span>
           <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.2 text-[10px] font-medium tracking-wide uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             v2.4

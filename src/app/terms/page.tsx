@@ -28,7 +28,7 @@ export default function TermsPage() {
                 1. Acceptance of Terms
               </h2>
               <p className="mt-2">
-                By accessing or using OmniFetch (&quot;the Service&quot;), you agree to be bound by these Terms of Service and all applicable federal, state, and international copyright laws. If you do not agree to these terms, do not use the Service.
+                By accessing or using AnyFetch (&quot;the Service&quot;), you agree to be bound by these Terms of Service and all applicable federal, state, and international copyright laws. If you do not agree to these terms, do not use the Service.
               </p>
             </section>
 
@@ -37,7 +37,7 @@ export default function TermsPage() {
                 2. Nature of Service & Compliance
               </h2>
               <p className="mt-2">
-                OmniFetch provides an automated web interface for inspecting publicly accessible media URLs and downloading permitted formats. OmniFetch is an intermediary technical tool. OmniFetch does NOT:
+                AnyFetch provides an automated web interface for inspecting publicly accessible media URLs and downloading permitted formats. AnyFetch is an intermediary technical tool. AnyFetch does NOT:
               </p>
               <ul className="mt-2 list-disc pl-5 space-y-1">
                 <li>Bypass digital rights management (DRM) or encryption mechanisms.</li>
@@ -52,7 +52,7 @@ export default function TermsPage() {
                 3. Permitted & Acceptable Use
               </h2>
               <p className="mt-2">
-                You agree to use OmniFetch exclusively for personal, educational, research, fair use, or content-creator archival purposes where you own the content or have obtained express authorization from the rights holder. You shall not use OmniFetch for commercial copyright infringement, unlawful redistribution, or automated denial-of-service scraping.
+                You agree to use AnyFetch exclusively for personal, educational, research, fair use, or content-creator archival purposes where you own the content or have obtained express authorization from the rights holder. You shall not use AnyFetch for commercial copyright infringement, unlawful redistribution, or automated denial-of-service scraping.
               </p>
             </section>
 
@@ -70,7 +70,7 @@ export default function TermsPage() {
                 5. Disclaimer of Warranties & Limitation of Liability
               </h2>
               <p className="mt-2">
-                The Service is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis without warranties of any kind. OmniFetch shall not be held liable for any direct, indirect, incidental, or consequential damages resulting from user misuse or third-party copyright claims.
+                The Service is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis without warranties of any kind. AnyFetch shall not be held liable for any direct, indirect, incidental, or consequential damages resulting from user misuse or third-party copyright claims.
               </p>
             </section>
           </div>

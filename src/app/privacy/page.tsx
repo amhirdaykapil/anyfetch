@@ -28,7 +28,7 @@ export default function PrivacyPage() {
                 1. Fundamental Principle: Zero Retention
               </h2>
               <p className="mt-2">
-                At OmniFetch, privacy is an architectural guarantee, not an afterthought. When you submit a link to analyze or stream a file, our servers do not log the query, do not store copies of downloaded assets, and do not associate search queries with IP addresses or personal profiles.
+                At AnyFetch, privacy is an architectural guarantee, not an afterthought. When you submit a link to analyze or stream a file, our servers do not log the query, do not store copies of downloaded assets, and do not associate search queries with IP addresses or personal profiles.
               </p>
             </section>
 
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
                 4. Cookies & Analytics
               </h2>
               <p className="mt-2">
-                OmniFetch does not deploy invasive tracking cookies, third-party advertising trackers, or fingerprinting scripts. We store only your theme preference (<code className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[11px] dark:bg-zinc-800">omnifetch_theme</code>) in local storage.
+                AnyFetch does not deploy invasive tracking cookies, third-party advertising trackers, or fingerprinting scripts. We store only your theme preference (<code className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[11px] dark:bg-zinc-800">anyfetch_theme</code>) in local storage.
               </p>
             </section>
 
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
                 5. Security Safeguards
               </h2>
               <p className="mt-2">
-                All communications between your browser and OmniFetch are encrypted using modern Transport Layer Security (TLS 1.3). Upstream connections enforce strict hostname validation and SSRF firewalls.
+                All communications between your browser and AnyFetch are encrypted using modern Transport Layer Security (TLS 1.3). Upstream connections enforce strict hostname validation and SSRF firewalls.
               </p>
             </section>
           </div>

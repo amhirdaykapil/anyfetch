@@ -47,7 +47,7 @@ export class TikTokAdapter implements PlatformAdapter {
                 `https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`,
                 {
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) OmniMedia/1.0',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AnyFetch/2.0',
                     },
                     signal: AbortSignal.timeout(7000),
                 }

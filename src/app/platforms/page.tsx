@@ -99,7 +99,7 @@ export default function SupportedPlatformsPage() {
                             Supported Platforms & Formats
                         </h1>
                         <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-base">
-                            OmniFetch operates using compliant extraction methods, official oEmbed interfaces, and authorized public endpoints. Below is our capability and limitations matrix across every platform.
+                            AnyFetch operates using compliant extraction methods, official oEmbed interfaces, and authorized public endpoints. Below is our capability and limitations matrix across every platform.
                         </p>
                     </div>
 
@@ -111,7 +111,7 @@ export default function SupportedPlatformsPage() {
                                 <span className="font-semibold text-zinc-900 dark:text-zinc-200">
                                     Compliance Commitment:
                                 </span>{' '}
-                                OmniFetch never circumvents DRM, password barriers, paywalls, or private account privacy settings. If an item is restricted or deleted, our system displays a transparent explanation and offers the official platform link for viewing.
+                                AnyFetch never circumvents DRM, password barriers, paywalls, or private account privacy settings. If an item is restricted or deleted, our system displays a transparent explanation and offers the official platform link for viewing.
                             </div>
                         </div>
                     </div>

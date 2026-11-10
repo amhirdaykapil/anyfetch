@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'OmniFetch — Universal Media Downloader | Highest Permitted Quality',
+  title: 'AnyFetch — Universal Media Downloader | Highest Permitted Quality',
   description:
     'Download supported videos, photos, and media from YouTube, Instagram, Pinterest, TikTok, X, Reddit, Threads, and direct media URLs in original master quality.',
   keywords: [
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     'twitter video download',
     'high quality media downloader',
   ],
-  authors: [{ name: 'OmniFetch Engineering' }],
+  authors: [{ name: 'AnyFetch Engineering' }],
   icons: {
     icon: '/favicon.ico',
   },

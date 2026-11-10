@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AnyFetch — Universal High-Quality Media Downloader
+
+AnyFetch is a fast, modern web application for analyzing and downloading public media from supported platforms (YouTube, Reddit, Instagram, X/Twitter, Pinterest, TikTok, Threads, Facebook, and direct media URLs) at the highest permitted quality.
 
 ## Getting Started
 

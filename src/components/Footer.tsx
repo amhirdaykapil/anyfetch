@@ -101,7 +101,7 @@ export function Footer() {
 
         {/* Bottom Bar */}
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-zinc-200/60 pt-6 text-[11px] text-zinc-500 sm:flex-row dark:border-white/[0.06] dark:text-zinc-500">
-          <p>© 2026 OmniFetch Inc. All rights reserved.</p>
+          <p>© 2026 AnyFetch Inc. All rights reserved.</p>
           <p className="flex items-center gap-1">
             Built for creators, researchers, and public media archival.
           </p>

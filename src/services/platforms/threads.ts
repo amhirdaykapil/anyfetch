@@ -253,7 +253,7 @@ export class ThreadsAdapter implements PlatformAdapter {
                 if (mediaUrl) {
                     const ext = itemIsVideo ? 'mp4' : 'jpg';
                     const slideNum = String(idx + 1).padStart(2, '0');
-                    const dlFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                    const dlFilename = `AnyFetch_Slide_${slideNum}.${ext}`;
                     gallery.push({
                         id: `threads-carousel-${idx + 1}`,
                         position: idx + 1,

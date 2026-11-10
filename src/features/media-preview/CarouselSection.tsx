@@ -44,7 +44,7 @@ export function CarouselSection({ items, title, onDownloadStarted }: CarouselSec
                 const item = items[idx];
                 const slideNum = String(item.position || idx + 1).padStart(2, '0');
                 const ext = item.format || (item.type === 'video' ? 'mp4' : 'jpg');
-                const filename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                const filename = `AnyFetch_Slide_${slideNum}.${ext}`;
 
                 setZipStatusText(`Downloading ${idx + 1}/${total} (${Math.round(((idx) / total) * 90)}%)...`);
 
@@ -75,7 +75,7 @@ export function CarouselSection({ items, title, onDownloadStarted }: CarouselSec
                 }
             );
 
-            const safeBaseTitle = sanitizeFilename(title.substring(0, 45), 'OmniFetch_Carousel');
+            const safeBaseTitle = sanitizeFilename(title.substring(0, 45), 'AnyFetch_Carousel');
             const zipFilename = `${safeBaseTitle}_${total}_Slides.zip`;
 
             const blobUrl = window.URL.createObjectURL(zipBlob);
@@ -196,7 +196,7 @@ export function CarouselSection({ items, title, onDownloadStarted }: CarouselSec
                 {items.map((item, idx) => {
                     const slideNum = String(item.position || idx + 1).padStart(2, '0');
                     const ext = item.format || (item.type === 'video' ? 'mp4' : 'jpg');
-                    const defaultFilename = `OmniFetch_Slide_${slideNum}.${ext}`;
+                    const defaultFilename = `AnyFetch_Slide_${slideNum}.${ext}`;
 
                     // Format option adapter for individual DownloadProgressButton
                     const formatOption: MediaFormatOption = {

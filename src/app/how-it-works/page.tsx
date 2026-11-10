@@ -10,7 +10,7 @@ export default function HowItWorksPage() {
       number: '01',
       title: 'URL Submission & SSRF Protection',
       description:
-        'When you paste a link, OmniFetch immediately validates the URL structure, parses the hostname, and conducts a deep DNS inspection to guarantee that the destination is a safe public web address. Any requests targeting private network subnets (RFC 1918), local interfaces (127.0.0.1, ::1), or internal cloud metadata servers are instantly rejected before an upstream socket is opened.',
+        'When you paste a link, AnyFetch immediately validates the URL structure, parses the hostname, and conducts a deep DNS inspection to guarantee that the destination is a safe public web address. Any requests targeting private network subnets (RFC 1918), local interfaces (127.0.0.1, ::1), or internal cloud metadata servers are instantly rejected before an upstream socket is opened.',
       icon: <ShieldCheck className="h-6 w-6 text-emerald-500" />,
     },
     {
@@ -24,7 +24,7 @@ export default function HowItWorksPage() {
       number: '03',
       title: 'Unified Media Normalization',
       description:
-        'Raw responses from different APIs are translated into a standardized MediaResult structure. Whether the post contains a 1080p video, a multi-image gallery, an audio track, or a direct PDF document, OmniFetch presents clean, transparent format choices with genuine file sizes and resolutions.',
+        'Raw responses from different APIs are translated into a standardized MediaResult structure. Whether the post contains a 1080p video, a multi-image gallery, an audio track, or a direct PDF document, AnyFetch presents clean, transparent format choices with genuine file sizes and resolutions.',
       icon: <Network className="h-6 w-6 text-violet-500" />,
     },
     {
@@ -48,7 +48,7 @@ export default function HowItWorksPage() {
               System Architecture & Workflow
             </span>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl">
-              How OmniFetch Works
+              How AnyFetch Works
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-base">
               A peek under the hood of our secure, zero-retention media inspection and streaming pipeline.

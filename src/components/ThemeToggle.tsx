@@ -9,7 +9,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem('omnifetch_theme');
+    const stored = localStorage.getItem('anyfetch_theme') || localStorage.getItem('omnifetch_theme');
     if (stored === 'light') {
       setIsDark(false);
       document.documentElement.classList.remove('dark');
@@ -24,10 +24,10 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
     setIsDark(nextDark);
     if (nextDark) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('omnifetch_theme', 'dark');
+      localStorage.setItem('anyfetch_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('omnifetch_theme', 'light');
+      localStorage.setItem('anyfetch_theme', 'light');
     }
   };
 

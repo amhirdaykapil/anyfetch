@@ -16,9 +16,9 @@ export default function FAQPage() {
 
   const faqs: FAQItem[] = [
     {
-      question: 'Is OmniFetch completely free to use?',
+      question: 'Is AnyFetch completely free to use?',
       answer:
-        'Yes. OmniFetch is 100% free for all users. You do not need an account, credit card, or personal registration to inspect public links and download available media formats.',
+        'Yes. AnyFetch is 100% free for all users. You do not need an account, credit card, or personal registration to inspect public links and download available media formats.',
     },
     {
       question: 'Do you store copies of the files I download?',
@@ -38,7 +38,7 @@ export default function FAQPage() {
     {
       question: 'Why does analysis fail for private accounts or Instagram Stories?',
       answer:
-        'OmniFetch strictly complies with platform security boundaries and privacy controls. Content hosted on private Instagram/Threads accounts, protected tweets, private subreddits, or temporary stories cannot and should not be scraped without user authorization. When this happens, we clearly display an explanatory message and link you to the official platform.',
+        'AnyFetch strictly complies with platform security boundaries and privacy controls. Content hosted on private Instagram/Threads accounts, protected tweets, private subreddits, or temporary stories cannot and should not be scraped without user authorization. When this happens, we clearly display an explanatory message and link you to the official platform.',
     },
     {
       question: 'How does SSRF protection work?',
@@ -48,7 +48,7 @@ export default function FAQPage() {
     {
       question: 'Can I download multi-image posts or galleries?',
       answer:
-        'Yes. When you paste a Reddit gallery or Twitter post with multiple photos, OmniFetch displays an interactive carousel with individual download buttons for each master image.',
+        'Yes. When you paste a Reddit gallery or Twitter post with multiple photos, AnyFetch displays an interactive carousel with individual download buttons for each master image.',
     },
     {
       question: 'Where is my download history saved?',

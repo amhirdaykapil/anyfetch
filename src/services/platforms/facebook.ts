@@ -199,7 +199,7 @@ export class FacebookAdapter implements PlatformAdapter {
             const oembedRes = await fetch(
                 `https://www.facebook.com/plugins/video/oembed.json/?url=${encodeURIComponent(targetUrl)}`,
                 {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) OmniFetch/2.0' },
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AnyFetch/2.0' },
                     signal: AbortSignal.timeout(6000),
                 }
             );

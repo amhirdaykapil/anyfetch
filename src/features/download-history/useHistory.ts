@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DownloadHistoryItem } from '@/types/media';
 
-const STORAGE_KEY = 'omnifetch_download_history';
+const STORAGE_KEY = 'anyfetch_download_history';
+const LEGACY_STORAGE_KEY = 'omnifetch_download_history';
 
 export function useHistory() {
   const [history, setHistory] = useState<DownloadHistoryItem[]>([]);
@@ -11,7 +12,7 @@ export function useHistory() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
       if (stored) {
         setHistory(JSON.parse(stored));
       }
