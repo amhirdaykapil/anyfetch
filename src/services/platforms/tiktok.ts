@@ -1,6 +1,7 @@
 import { MediaFormatOption, MediaResult, MediaType } from '@/types/media';
 import { ExtractionError, PlatformAdapter } from './base';
 import { sanitizeFilename } from '@/lib/security';
+import { decodeHtmlEntities } from '@/lib/html-entities';
 
 export class TikTokAdapter implements PlatformAdapter {
     public id = 'tiktok' as const;
@@ -66,8 +67,8 @@ export class TikTokAdapter implements PlatformAdapter {
         // Try scraping HTML for og:video and direct stream
         let ogVideo = '';
         let ogImage = oembedData?.thumbnail_url || '';
-        let title = oembedData?.title || 'TikTok Video';
-        let authorName = oembedData?.author_name || 'TikTok Creator';
+        let title = decodeHtmlEntities(oembedData?.title || 'TikTok Video');
+        let authorName = decodeHtmlEntities(oembedData?.author_name || 'TikTok Creator');
 
         try {
             const htmlRes = await fetch(targetUrl, {
@@ -106,6 +107,7 @@ export class TikTokAdapter implements PlatformAdapter {
 
         const cleanTitle = sanitizeFilename(title.substring(0, 50), 'TikTok_Video');
         const formats: MediaFormatOption[] = [];
+        const thumbnails: MediaFormatOption[] = [];
 
         if (ogVideo) {
             formats.push({
@@ -115,38 +117,41 @@ export class TikTokAdapter implements PlatformAdapter {
                 quality: 'Original HD Quality',
                 downloadUrl: `/api/download?url=${encodeURIComponent(ogVideo)}&filename=${encodeURIComponent(`${cleanTitle}.mp4`)}`,
                 hasAudio: true,
+                category: 'video',
             });
         }
 
         if (ogImage) {
-            formats.push({
-                id: 'tt-cover-img',
-                label: 'Original Video Cover (JPG)',
-                format: 'jpg',
-                quality: 'High Resolution',
-                downloadUrl: `/api/download?url=${encodeURIComponent(ogImage)}&filename=${encodeURIComponent(`${cleanTitle}_cover.jpg`)}`,
-            });
-        }
+                thumbnails.push({
+                    id: 'tt-cover-img',
+                    label: 'Original Video Cover (JPG)',
+                    format: 'jpg',
+                    quality: 'High Resolution Poster',
+                    downloadUrl: `/api/download?url=${encodeURIComponent(ogImage)}&filename=${encodeURIComponent(`${cleanTitle}_cover.jpg`)}`,
+                    category: 'thumbnail',
+                });
+            }
 
         return {
-            id: `tiktok-${Buffer.from(targetUrl).toString('base64url').substring(0, 16)}`,
-            originalUrl: url,
-            canonicalUrl: targetUrl,
-            platform: 'tiktok',
-            platformName: 'TikTok',
-            title,
-            author: {
-                name: authorName,
-                username: oembedData?.author_unique_id ? `@${oembedData.author_unique_id}` : undefined,
-                profileUrl: oembedData?.author_url,
-            },
-            mediaType: 'video',
-            thumbnailUrl: ogImage,
-            formats,
-            complianceNotice:
-                'Downloads of public TikTok videos are subject to platform terms and creator rights.',
-            officialViewUrl: targetUrl,
-            fetchedAt: new Date().toISOString(),
-        };
+                id: `tiktok-${Buffer.from(targetUrl).toString('base64url').substring(0, 16)}`,
+                originalUrl: url,
+                canonicalUrl: targetUrl,
+                platform: 'tiktok',
+                platformName: 'TikTok',
+                title,
+                author: {
+                    name: authorName,
+                    username: oembedData?.author_unique_id ? `@${oembedData.author_unique_id}` : undefined,
+                    profileUrl: oembedData?.author_url,
+                },
+                mediaType: 'video',
+                thumbnailUrl: ogImage,
+                formats,
+                thumbnails: thumbnails.length > 0 ? thumbnails : undefined,
+                complianceNotice:
+                    'Downloads of public TikTok videos are subject to platform terms and creator rights.',
+                officialViewUrl: targetUrl,
+                fetchedAt: new Date().toISOString(),
+            };
+        }
     }
-}

@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateUrlSecurity, sanitizeFilename } from '@/lib/security';
+import { validateUrlSecurity, sanitizeFilename, buildContentDisposition } from '@/lib/security';
 import { downloadRateLimiter } from '@/lib/rate-limiter';
 import { isAllowedMimeType, getExtensionFromMime, getMimeFromExtension } from '@/lib/mime-types';
 import { spawn } from 'child_process';
 import { Readable } from 'stream';
 
 const PYTHON_BIN =
-  process.env.PYTHON_PATH ||
-  'E:\\Users\\itsbe\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+    process.env.PYTHON_PATH ||
+    'E:\\Users\\itsbe\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
 
 const FFMPEG_BIN =
-  process.env.FFMPEG_PATH ||
-  'E:\\Users\\itsbe\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
+    process.env.FFMPEG_PATH ||
+    'E:\\Users\\itsbe\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
 
 /**
  * Generates appropriate CDN headers (Referer, User-Agent, Origin, Range)
@@ -73,280 +73,278 @@ export async function GET(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
     const rateLimit = downloadRateLimiter.check(ip);
 
-        if (!rateLimit.allowed) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: {
-                        code: 'RATE_LIMITED',
-                        message: `Download rate limit reached. Please wait ${rateLimit.resetInSec} seconds.`,
-                    },
+    if (!rateLimit.allowed) {
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: 'RATE_LIMITED',
+                    message: `Download rate limit reached. Please wait ${rateLimit.resetInSec} seconds.`,
                 },
-                { status: 429 }
-            );
-        }
+            },
+            { status: 429 }
+        );
+    }
 
-        const { searchParams } = new URL(req.url);
-        const downloadType = searchParams.get('type');
+    const { searchParams } = new URL(req.url);
+    const downloadType = searchParams.get('type');
 
-        // Handle YouTube authorized streaming with on-the-fly audio/video multiplexing
-        if (downloadType === 'yt_stream') {
-            const videoId = searchParams.get('videoId');
-            const quality = searchParams.get('quality') || '720';
-            const customFilename = searchParams.get('filename') || `youtube_${videoId}.mp4`;
+    // Handle YouTube authorized streaming with on-the-fly audio/video multiplexing
+    if (downloadType === 'yt_stream') {
+        const videoId = searchParams.get('videoId');
+        const quality = searchParams.get('quality') || '720';
+        const customFilename = searchParams.get('filename') || `youtube_${videoId}.mp4`;
 
-            if (!videoId || !/^[a-zA-Z0-9_-]{6,15}$/.test(videoId)) {
-                return NextResponse.json(
-                    { success: false, error: { code: 'INVALID_URL', message: 'Invalid YouTube video ID parameter.' } },
-                    { status: 400 }
-                );
-            }
-
-            const isAudio = quality === 'audio';
-            const safeFilename = sanitizeFilename(customFilename, isAudio ? 'audio.mp3' : 'video.mp4');
-            const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-            const args = isAudio
-                ? [
-                      '-m',
-                      'yt_dlp',
-                      '-f',
-                      'ba/b',
-                      '-x',
-                      '--audio-format',
-                      'mp3',
-                      '--ffmpeg-location',
-                      FFMPEG_BIN,
-                      '-o',
-                      '-',
-                      '--no-playlist',
-                      '--no-warnings',
-                      targetUrl,
-                  ]
-                : [
-                      '-m',
-                      'yt_dlp',
-                      '-f',
-                      `bestvideo[height<=${parseInt(quality, 10) || 720}]+bestaudio/best[height<=${parseInt(quality, 10) || 720}]/best`,
-                      '--downloader-args',
-                      'ffmpeg_o:-movflags +frag_keyframe+empty_moov -f mp4',
-                      '--ffmpeg-location',
-                      FFMPEG_BIN,
-                      '-o',
-                      '-',
-                      '--no-playlist',
-                      '--no-warnings',
-                      targetUrl,
-                  ];
-
-            try {
-                const child = spawn(/*turbopackIgnore: true*/ PYTHON_BIN, args, { stdio: ['ignore', 'pipe', 'ignore'] });
-                req.signal.addEventListener('abort', () => {
-                    child.kill();
-                });
-
-                const webStream = Readable.toWeb(child.stdout);
-                const headers = new Headers();
-                headers.set(
-                    'Content-Disposition',
-                    `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`
-                );
-                headers.set('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
-                headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-
-                return new NextResponse(webStream as ReadableStream, {
-                    status: 200,
-                    headers,
-                });
-            } catch (err) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        error: {
-                            code: 'STREAM_FAILED',
-                            message: `Streaming pipeline failed: ${(err as Error).message}`,
-                        },
-                    },
-                    { status: 502 }
-                );
-            }
-        }
-
-        const rawTargetUrl = searchParams.get('url');
-        const customFilename = searchParams.get('filename') || 'media_download';
-
-        if (!rawTargetUrl) {
+        if (!videoId || !/^[a-zA-Z0-9_-]{6,15}$/.test(videoId)) {
             return NextResponse.json(
-                { success: false, error: { code: 'INVALID_URL', message: 'Missing required "url" parameter.' } },
+                { success: false, error: { code: 'INVALID_URL', message: 'Invalid YouTube video ID parameter.' } },
                 { status: 400 }
             );
         }
 
-        let currentUrl = rawTargetUrl;
-        let response: Response | null = null;
-        const maxRedirects = 5;
+        const isAudio = quality === 'audio';
+        const safeFilename = sanitizeFilename(customFilename, isAudio ? 'audio.mp3' : 'video.mp4');
+        const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+        const args = isAudio
+            ? [
+                '-m',
+                'yt_dlp',
+                '-f',
+                'ba/b',
+                '-x',
+                '--audio-format',
+                'mp3',
+                '--ffmpeg-location',
+                FFMPEG_BIN,
+                '-o',
+                '-',
+                '--no-playlist',
+                '--no-warnings',
+                targetUrl,
+            ]
+            : [
+                '-m',
+                'yt_dlp',
+                '-f',
+                `bestvideo[height<=${parseInt(quality, 10) || 720}]+bestaudio/best[height<=${parseInt(quality, 10) || 720}]/best`,
+                '--downloader-args',
+                'ffmpeg_o:-movflags +frag_keyframe+empty_moov -f mp4',
+                '--ffmpeg-location',
+                FFMPEG_BIN,
+                '-o',
+                '-',
+                '--no-playlist',
+                '--no-warnings',
+                targetUrl,
+            ];
 
         try {
-            // Safe redirect follower with strict SSRF validation at every hop
-            for (let hop = 0; hop <= maxRedirects; hop++) {
-                let parsedUrl: URL;
-                try {
-                    parsedUrl = new URL(currentUrl);
-                } catch {
-                    return NextResponse.json(
-                        { success: false, error: { code: 'INVALID_URL', message: 'Malformed destination URL.' } },
-                        { status: 400 }
-                    );
-                }
+            const child = spawn(/*turbopackIgnore: true*/ PYTHON_BIN, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+            req.signal.addEventListener('abort', () => {
+                child.kill();
+            });
 
-                // SSRF check on this hop
-                const security = await validateUrlSecurity(currentUrl);
-                if (!security.isSafe) {
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            error: {
-                                code: 'SSRF_VIOLATION',
-                                message: `Security filter blocked access to ${parsedUrl.hostname}: ${security.reason}`,
-                            },
-                        },
-                        { status: 403 }
-                    );
-                }
+            const webStream = Readable.toWeb(child.stdout);
+            const headers = new Headers();
+            headers.set(
+                'Content-Disposition',
+                    buildContentDisposition(customFilename, isAudio ? 'audio.mp3' : 'video.mp4')
+            );
+            headers.set('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+            headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 
-                const upstreamHeaders = getUpstreamHeaders(parsedUrl, req.headers.get('range'));
+            return new NextResponse(webStream as ReadableStream, {
+                status: 200,
+                headers,
+            });
+        } catch (err) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'STREAM_FAILED',
+                        message: `Streaming pipeline failed: ${(err as Error).message}`,
+                    },
+                },
+                { status: 502 }
+            );
+        }
+    }
 
-                response = await fetch(currentUrl, {
-                    method: 'GET',
-                    headers: upstreamHeaders,
-                    redirect: 'manual',
-                    signal: AbortSignal.timeout(45000),
-                });
+    const rawTargetUrl = searchParams.get('url');
+    const customFilename = searchParams.get('filename') || 'media_download';
 
-                // Handle redirect status codes
-                if ([301, 302, 303, 307, 308].includes(response.status)) {
-                    const location = response.headers.get('location');
-                    if (!location) {
-                        return NextResponse.json(
-                            { success: false, error: { code: 'REDIRECT_ERROR', message: 'Redirect missing Location header.' } },
-                            { status: 502 }
-                        );
-                    }
-                    currentUrl = new URL(location, currentUrl).toString();
-                    continue;
-                }
+    if (!rawTargetUrl) {
+        return NextResponse.json(
+            { success: false, error: { code: 'INVALID_URL', message: 'Missing required "url" parameter.' } },
+            { status: 400 }
+        );
+    }
 
-                // Reached final destination
-                break;
-            }
+    let currentUrl = rawTargetUrl;
+    let response: Response | null = null;
+    const maxRedirects = 5;
 
-            if (!response) {
+    try {
+        // Safe redirect follower with strict SSRF validation at every hop
+        for (let hop = 0; hop <= maxRedirects; hop++) {
+            let parsedUrl: URL;
+            try {
+                parsedUrl = new URL(currentUrl);
+            } catch {
                 return NextResponse.json(
-                    { success: false, error: { code: 'FETCH_FAILED', message: 'No response from upstream host.' } },
-                    { status: 502 }
+                    { success: false, error: { code: 'INVALID_URL', message: 'Malformed destination URL.' } },
+                    { status: 400 }
                 );
             }
 
-                // Check upstream status (support 200 OK and 206 Partial Content)
-                if (!response.ok && response.status !== 206) {
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            error: {
-                                code: 'UPSTREAM_ERROR',
-                                message: `The upstream media host returned error HTTP ${response.status}. The media link may be expired, private, or restricted.`,
-                                status: response.status,
-                            },
+            // SSRF check on this hop
+            const security = await validateUrlSecurity(currentUrl);
+            if (!security.isSafe) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'SSRF_VIOLATION',
+                            message: `Security filter blocked access to ${parsedUrl.hostname}: ${security.reason}`,
                         },
-                        { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
+                    },
+                    { status: 403 }
+                );
+            }
+
+            const upstreamHeaders = getUpstreamHeaders(parsedUrl, req.headers.get('range'));
+
+            response = await fetch(currentUrl, {
+                method: 'GET',
+                headers: upstreamHeaders,
+                redirect: 'manual',
+                signal: AbortSignal.timeout(45000),
+            });
+
+            // Handle redirect status codes
+            if ([301, 302, 303, 307, 308].includes(response.status)) {
+                const location = response.headers.get('location');
+                if (!location) {
+                    return NextResponse.json(
+                        { success: false, error: { code: 'REDIRECT_ERROR', message: 'Redirect missing Location header.' } },
+                        { status: 502 }
                     );
                 }
+                currentUrl = new URL(location, currentUrl).toString();
+                continue;
+            }
 
-                    // Determine and normalize content type
-                    let rawContentType = response.headers.get('content-type') || '';
-                    let cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
+            // Reached final destination
+            break;
+        }
 
-                    // Deduce extensions
-                    let extFromMime = getExtensionFromMime(cleanContentType);
-                    let extFromFilename = (customFilename.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase();
+        if (!response) {
+            return NextResponse.json(
+                { success: false, error: { code: 'FETCH_FAILED', message: 'No response from upstream host.' } },
+                { status: 502 }
+            );
+        }
 
-                    // If upstream returns generic binary or octet-stream, infer from filename extension
-                    if (
-                        (!cleanContentType ||
-                            cleanContentType === 'application/octet-stream' ||
-                            cleanContentType === 'binary/octet-stream') &&
-                        extFromFilename
-                    ) {
-                        cleanContentType = getMimeFromExtension(extFromFilename);
-                        extFromMime = extFromFilename;
-                    }
+        // Check upstream status (support 200 OK and 206 Partial Content)
+        if (!response.ok && response.status !== 206) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'UPSTREAM_ERROR',
+                        message: `The upstream media host returned error HTTP ${response.status}. The media link may be expired, private, or restricted.`,
+                        status: response.status,
+                    },
+                },
+                { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
+            );
+        }
 
-                        // Fallback if still unknown
-                        if (!cleanContentType) {
-                            cleanContentType = 'application/octet-stream';
-                        }
+        // Determine and normalize content type
+        let rawContentType = response.headers.get('content-type') || '';
+        let cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
 
-                        // Security check: MIME must be allowed media/document
-                        if (!isAllowedMimeType(cleanContentType)) {
-                            return NextResponse.json(
-                                {
-                                    success: false,
-                                    error: {
-                                        code: 'UNALLOWED_MIME',
-                                        message: `The requested file type (${cleanContentType}) is not permitted.`,
-                                    },
-                                },
-                                { status: 415 }
-                            );
-                        }
+        // Deduce extensions
+        let extFromMime = getExtensionFromMime(cleanContentType);
+        let extFromFilename = (customFilename.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase();
 
-                        // Safe filename with guaranteed correct extension
-                        let safeFilename = sanitizeFilename(customFilename, 'download');
-                        if (!safeFilename.includes('.') && extFromMime && extFromMime !== 'bin') {
-                            safeFilename = `${safeFilename}.${extFromMime}`;
-                        }
+        // If upstream returns generic binary or octet-stream, infer from filename extension
+        if (
+            (!cleanContentType ||
+                cleanContentType === 'application/octet-stream' ||
+                cleanContentType === 'binary/octet-stream') &&
+            extFromFilename
+        ) {
+            cleanContentType = getMimeFromExtension(extFromFilename);
+            extFromMime = extFromFilename;
+        }
 
-                        // RFC 6266 / RFC 5987 compliant Content-Disposition
-                        const cleanAscii = safeFilename.replace(/[^\x20-\x7E]/g, '_');
-                        const utf8Encoded = encodeURIComponent(safeFilename);
-                        const contentDisposition = `attachment; filename="${cleanAscii}"; filename*=UTF-8''${utf8Encoded}`;
+        // Fallback if still unknown
+        if (!cleanContentType) {
+            cleanContentType = 'application/octet-stream';
+        }
 
-                        const headers = new Headers();
-                        headers.set('Content-Disposition', contentDisposition);
-                        headers.set('Content-Type', cleanContentType);
-                        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-                        headers.set('Accept-Ranges', 'bytes');
+        // Security check: MIME must be allowed media/document
+        if (!isAllowedMimeType(cleanContentType)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'UNALLOWED_MIME',
+                        message: `The requested file type (${cleanContentType}) is not permitted.`,
+                    },
+                },
+                { status: 415 }
+            );
+        }
 
-                        // Only set Content-Length if not compressed by upstream/undici
-                        const contentLength = response.headers.get('content-length');
-                        const contentEncoding = response.headers.get('content-encoding');
-                        if (contentLength && !contentEncoding) {
-                            headers.set('Content-Length', contentLength);
-                        }
+        // Safe filename with guaranteed correct extension
+        let safeFilename = sanitizeFilename(customFilename, 'download');
+        if (!safeFilename.includes('.') && extFromMime && extFromMime !== 'bin') {
+            safeFilename = `${safeFilename}.${extFromMime}`;
+        }
 
-                        const contentRange = response.headers.get('content-range');
-                        if (contentRange && response.status === 206) {
-                            headers.set('Content-Range', contentRange);
-                            return new NextResponse(response.body as ReadableStream, {
-                                status: 206,
-                                headers,
-                            });
-                        }
+        // RFC 6266 / RFC 5987 compliant Content-Disposition with ByteString guarantee
+        const contentDisposition = buildContentDisposition(safeFilename, `download.${extFromMime || 'bin'}`);
 
-                        return new NextResponse(response.body as ReadableStream, {
-                            status: 200,
-                            headers,
-                        });
-                    } catch (err) {
-                        return NextResponse.json(
-                            {
-                                success: false,
-                                error: {
-                                    code: 'STREAM_FAILED',
-                                    message: `Download stream failed: ${(err as Error).message}`,
-                                },
-                            },
-                            { status: 502 }
-                        );
-                    }
-                }
+        const headers = new Headers();
+        headers.set('Content-Disposition', contentDisposition);
+        headers.set('Content-Type', cleanContentType);
+        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        headers.set('Accept-Ranges', 'bytes');
+
+        // Only set Content-Length if not compressed by upstream/undici
+        const contentLength = response.headers.get('content-length');
+        const contentEncoding = response.headers.get('content-encoding');
+        if (contentLength && !contentEncoding) {
+            headers.set('Content-Length', contentLength);
+        }
+
+        const contentRange = response.headers.get('content-range');
+        if (contentRange && response.status === 206) {
+            headers.set('Content-Range', contentRange);
+            return new NextResponse(response.body as ReadableStream, {
+                status: 206,
+                headers,
+            });
+        }
+
+        return new NextResponse(response.body as ReadableStream, {
+            status: 200,
+            headers,
+        });
+    } catch (err) {
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: 'STREAM_FAILED',
+                    message: `Download stream failed: ${(err as Error).message}`,
+                },
+            },
+            { status: 502 }
+        );
+    }
+}

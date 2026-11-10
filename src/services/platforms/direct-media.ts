@@ -120,6 +120,7 @@ export class DirectMediaAdapter implements PlatformAdapter {
                 fileSizeFormatted: contentLength > 0 ? formatBytes(contentLength) : undefined,
                 downloadUrl: `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(finalFilename)}`,
                 isDirect: true,
+                category: mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'audio' : mediaType === 'image' ? 'image' : undefined,
             },
         ];
 

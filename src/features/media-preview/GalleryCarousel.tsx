@@ -62,6 +62,7 @@ export function GalleryCarousel({ items, title, onDownloadItem }: GalleryCarouse
                 <img
                     src={currentItem.thumbnailUrl || currentItem.url}
                     alt={`Gallery item ${currentIndex + 1}`}
+                    referrerPolicy="no-referrer"
                     className="h-full w-full object-contain"
                 />
 
@@ -95,6 +96,7 @@ export function GalleryCarousel({ items, title, onDownloadItem }: GalleryCarouse
                         <img
                             src={item.thumbnailUrl || item.url}
                             alt=""
+                            referrerPolicy="no-referrer"
                             className="h-full w-full object-cover"
                         />
                     </button>
