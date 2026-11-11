@@ -7,11 +7,11 @@ import { Readable } from 'stream';
 
 const PYTHON_BIN =
     process.env.PYTHON_PATH ||
-    'E:\\Users\\itsbe\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+    (process.platform === 'win32' ? 'python' : 'python3');
 
 const FFMPEG_BIN =
     process.env.FFMPEG_PATH ||
-    'E:\\Users\\itsbe\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
+    'ffmpeg';
 
 /**
  * Generates appropriate CDN headers (Referer, User-Agent, Origin, Range)
@@ -91,7 +91,9 @@ export async function GET(req: NextRequest) {
 
     // Support deterministic testing of live byte tracking and continuous progress
     if (downloadType === 'benchmark_test') {
-        const totalSize = parseInt(searchParams.get('size') || '54525952', 10); // default 52 MB
+        const rawSize = parseInt(searchParams.get('size') || '54525952', 10);
+        // Clamp between 1 KB and 100 MB to prevent resource exhaustion / DoS
+        const totalSize = isNaN(rawSize) ? 54525952 : Math.min(Math.max(rawSize, 1024), 100 * 1024 * 1024);
         const chunkSize = 256 * 1024; // 256 KB per chunk
         let bytesSent = 0;
 
@@ -243,7 +245,10 @@ export async function GET(req: NextRequest) {
                     success: false,
                     error: {
                         code: 'STREAM_FAILED',
-                        message: `Streaming pipeline failed: ${(err as Error).message}`,
+                        message:
+                            process.env.NODE_ENV === 'production'
+                                ? 'Streaming pipeline encountered an unexpected error.'
+                                : `Streaming pipeline failed: ${(err as Error).message}`,
                     },
                 },
                 { status: 502 }
@@ -424,7 +429,10 @@ export async function GET(req: NextRequest) {
                 success: false,
                 error: {
                     code: 'STREAM_FAILED',
-                    message: `Download stream failed: ${(err as Error).message}`,
+                    message:
+                        process.env.NODE_ENV === 'production'
+                            ? 'Download stream encountered an unexpected error.'
+                            : `Download stream failed: ${(err as Error).message}`,
                 },
             },
             { status: 502 }

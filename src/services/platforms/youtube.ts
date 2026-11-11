@@ -9,7 +9,7 @@ const execFileAsync = promisify(execFile);
 
 const PYTHON_BIN =
     process.env.PYTHON_PATH ||
-    'E:\\Users\\itsbe\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+    (process.platform === 'win32' ? 'python' : 'python3');
 
 export class YouTubeAdapter implements PlatformAdapter {
     public id = 'youtube' as const;

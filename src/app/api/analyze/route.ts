@@ -96,7 +96,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
                 error: {
                     code: 'FETCH_FAILED',
                     message: 'An unexpected error occurred while analyzing this link. Please try again or verify the URL is public.',
-                    details: (err as Error).message,
+                    details: process.env.NODE_ENV === 'production' ? undefined : (err as Error).message,
                 },
             },
             { status: 500 }
