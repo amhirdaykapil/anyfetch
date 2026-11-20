@@ -218,10 +218,6 @@ Contributions, bug reports, feature requests, and suggestions are welcome!
 4. Test your implementation.
 5. Submit a Pull Request.
 
-Repository:
-
-[https://github.com/amhirdaykapil/anyfetch](https://github.com/amhirdaykapil/anyfetch)
-
 ---
 
 ## License & Usage
