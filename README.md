@@ -236,9 +236,4 @@ AnyFetch is an independent project and is not affiliated with or officially endo
 
 ---
 
-<p align="center">
-  Made with passion by <a href="https://github.com/amhirdaykapil">Hirday Kapil</a>
-  <br />
-  <br />
-  <a href="https://github.com/amhirdaykapil/anyfetch">GitHub Repository</a>
-</p>
+#<p align="center">  Made with passion by <a href="https://github.com/amhirdaykapil">Hirday Kapil</a></p>
