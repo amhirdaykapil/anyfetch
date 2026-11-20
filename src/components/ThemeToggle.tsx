@@ -10,12 +10,14 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
   useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem('anyfetch_theme') || localStorage.getItem('omnifetch_theme');
-    if (stored === 'light') {
-      setIsDark(false);
-      document.documentElement.classList.remove('dark');
-    } else {
-      setIsDark(true);
+    const isThemeDark = stored !== 'light';
+    setIsDark(isThemeDark);
+    if (isThemeDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
   }, []);
 
@@ -24,9 +26,11 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
     setIsDark(nextDark);
     if (nextDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
       localStorage.setItem('anyfetch_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
       localStorage.setItem('anyfetch_theme', 'light');
     }
   };
@@ -41,7 +45,8 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
     <button
       type="button"
       onClick={toggleTheme}
-      aria-label="Toggle theme"
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       className={`relative flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/80 bg-zinc-100/50 text-zinc-600 transition-all hover:bg-zinc-200/60 hover:text-zinc-900 dark:border-white/[0.08] dark:bg-zinc-900/60 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-100 ${className}`}
     >
       {isDark ? (
