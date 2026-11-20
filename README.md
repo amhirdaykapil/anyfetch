@@ -1,5 +1,5 @@
 
-# AnyFetch — Universal High-Quality Media Downloader
+# <h1 align="center">AnyFetch — Universal High-Quality Media Downloader</h1>
 
 <p align="center">
   A fast, modern and security-focused universal media downloader.
